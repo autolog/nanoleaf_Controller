@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<PluginConfig>
+    <SupportURL>http://www.yourdomain.com/plugin/ApplianceModule.html</SupportURL>
+    <Field id="description" type="label">
+        <Label>This Plugin controls nanoleaf devices. 😄</Label>
+    </Field>
+    <Field id="copyright" type="label">
+        <Label>Copyright © 2017 Autolog</Label>
+    </Field>
+
+    <Field id="separator-1" type="separator"/>  
+
+    <Field id="help-1" type="label">
+        <Label>Use status polling to update the state of the nanonleaf device(s) periodically.</Label>
+    </Field>
+    <Field type="checkbox" id="statusPolling" defaultValue="false" tooltip="Tick to turn on polling of all nanonleaf devices">
+        <Label>Status polling:</Label>
+        <Description>Enable polling of all nanoleaf devices.</Description>
+    </Field>
+    <Field id="pollingSeconds" type="menu" defaultValue="300" enabledBindingId="statusPolling" tooltip="Select polling interval">
+        <Label>Polling Interval:</Label>
+        <List>
+            <Option value="300">Every 5 minutes</Option>
+            <Option value="60">Every minute</Option>
+            <Option value="30">Every 30 seconds</Option>
+            <Option value="10">Every 10 seconds</Option>
+            <Option value="5">Every 5 seconds</Option>
+        </List>
+    </Field>
+    <Field id="missedPollLimit" type="textfield" defaultValue="1" enabledBindingId="statusPolling" tooltip="Set number of polls after which if no contact, a nanoleaf device will be flagged with a 'no ack'">
+        <Label>Max polls missed limit?:</Label>
+    </Field>
+    <Field id="help-2" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+        <Label>Specify maximum number of polls allowed to be missed before a nanoleaf device will be flagged with a 'no ack'</Label>
+    </Field>
+
+    <Field id="separator-2" type="separator"/>  
+
+    <Field id="defaultDiscoveryPeriodLabel" type="label">
+        <Label>Default timeout to use when discovering nanoleaf devices.</Label>
+    </Field>
+    <Field type="textfield" id="defaultDiscoveryPeriod" defaultValue="30">
+        <Label>Discovery Timeout:</Label>
+    </Field>
+
+    <Field id="help-3" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+        <Label>Specify discovery timeout in seconds e.g 10</Label>
+    </Field>
+
+    <Field id="separator-3" type="separator"/>  
+    <Field id="help-4" type="label">
+        <Label>Use Update Check to check for a new release of the nanoleaf Controller plugin on Github. Use plugin menu to update plugin.</Label>
+    </Field>
+    <Field type="checkbox" id="updateCheck" defaultValue="true" tooltip="Tick to turn on checking for new nanoleaf Controller plugin version">
+        <Label>Check for updates:</Label>
+        <Description>Enable to check for new version of nanoleaf Controller plugin.</Description>
+    </Field>
+    <Field id="checkFrequency" type="menu" defaultValue="DAILY" enabledBindingId="updateCheck" tooltip="Select update check frequency">
+        <Label>Check Frequency:</Label>
+        <List>
+            <Option value="DAILY">Check every day</Option>
+            <Option value="WEEKLY">Check every week</Option>
+        </List>
+    </Field>
+    <Field id="separator-4" type="separator"/>  
+
+    <Field type="checkbox" id="monitorDebugEnabled" default="false">
+        <Label>Monitoring / debugging:</Label>
+        <Description>Enable monitoring and debugging options.</Description>
+    </Field>
+
+    <Field id="separator-5" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
+
+    <Field id="help-5" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Select monitoring / debugging to be performed by ticking required option(s) below and then clicking Save.</Label>
+    </Field>
+    <Field type="checkbox" id="debugGeneral" defaultValue="false"  visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" tooltip="Enable logging of detailed debugging info." alwaysUseInDialogHeightCalc="true">
+        <Label>General:</Label>
+        <Description>Debug 'general' processing.</Description>
+    </Field>
+    <Field type="checkbox" id="monitorSendReceive" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Monitor Send / Receive:</Label>
+        <Description>Monitor messages sent and Received to/from nanoleaf devices.</Description>
+    </Field>
+    <Field type="checkbox" id="debugSendReceive" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Debug Send / Receive:</Label>
+        <Description>Debug 'send / Receive to nanoleaf devices' processing.</Description>
+    </Field>
+    <Field type="checkbox" id="debugMethodTrace" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Method Trace:</Label>
+        <Description>Trace Method calls.</Description>
+    </Field>
+    <Field type="checkbox" id="debugPolling" defaultValue="false" tooltip="Enable debugging of device polling." visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Debug Polling:</Label>
+        <Description>Debug 'polling' processing.</Description>
+    </Field>
+
+    <Field id="separator-6" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
+
+    <Field type="textfield" id="debugFilteredIpAddresses" defaultValue="" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>nanoleaf device Filter IP Address(es):</Label>
+    </Field>
+    <Field id="help-6" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+        <Label>Used for debugging only, in order to constrain processing to specific nanoleaf devices.</Label>
+    </Field>
+
+
+</PluginConfig>

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<Actions>
+    <Action id="setEffect" deviceFilter="self.nanoleafDevice">
+        <Name>Set Effect</Name>
+        <ConfigUI>
+            <Field id="effectList" type="menu" defaultValue="SELECT_EFFECT" alwaysUseInDialogHeightCalc="true">
+            <Label>Effect Name:</Label>
+            <List class="self" filter="" method="_buildAvailableEffectsList" dynamicReload="true"/>
+        </Field>
+        </ConfigUI>
+        <CallbackMethod>processSetEffect</CallbackMethod>
+    </Action>
+
+    <Action id="discoverDevices">
+        <Name>Discover nanoleaf Devices</Name>
+        <CallbackMethod>processDiscoverDevices</CallbackMethod>
+    </Action>
+</Actions>
