@@ -202,13 +202,19 @@ The Plugin provides two additional actions under *'nanoleaf Actions’*:
 * Discover nanoleaf Devices
 
 #### Discover nanoleaf Devices (Action)
+
     Running this action will cause the plugin to try and discover nanoleaf devices on the local network. Once new nanoleaf devices are found, You can use the *NEW...* command from the main UI to add a new device.
 
 #### Set Effect (Action)
 
-    Use this action to select  an availbale effect already defined on the physical nanaoleaf device. When you run the action the effect will be run on the nanoleaf device.
+    Use this action to select an availbale effect already defined on the physical nanoleaf device. When you run the action the effect will be run on the nanoleaf device.
+
+![Action Set Effect](readme_md_images/action_set_effect.png "Action Set Effect")
+
+    Note that communication must have been successfully made to the nanoleaf device for the dynmaic effect list to be built for selection in the action.
 
 ### States
+
 The plugin provides the following states:
 
 *To Be Advised*

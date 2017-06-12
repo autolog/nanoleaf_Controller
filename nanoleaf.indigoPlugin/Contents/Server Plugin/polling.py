@@ -71,25 +71,20 @@ class ThreadPolling(threading.Thread):
                     self.globals['polling']['count'] += 1  # Increment polling count
 
                     # Check if nanoleaf devices are responding to polls
-                    noAck = False  # Assume all lights responding
                     for devId in self.globals['nl']:
                         if ((len(self.globals['debug']['debugFilteredIpAddresses']) == 0) 
                             or ((len(self.globals['debug']['debugFilteredIpAddresses']) > 0) 
                                 and ('ipAddress' in self.globals['nl'][devId]) 
                                 and (self.globals['nl'][devId]['ipAddress'] in self.globals['debug']['debugFilteredIpAddresses']))):
                             dev_poll_check = self.globals['nl'][devId]['lastResponseToPollCount'] + self.globals['polling']['missedLimit']
-                            self.pollingLogger.debug(u"Dev = '%s', Count = %s, LIFX LastResponse = %s, Missed Limit = %s, Check = %s" % (indigo.devices[devId].name, self.globals['polling']['count'], self.globals['nl'][devId]['lastResponseToPollCount'], self.globals['polling']['missedLimit'], dev_poll_check))
+                            self.pollingLogger.debug(u"Dev = '%s', Count = %s, nanoleaf LastResponse = %s, Missed Limit = %s, Check = %s" % (indigo.devices[devId].name, self.globals['polling']['count'], self.globals['nl'][devId]['lastResponseToPollCount'], self.globals['polling']['missedLimit'], dev_poll_check))
                             dev = indigo.devices[devId]
                             if (dev_poll_check < self.globals['polling']['count']) or (not self.globals['nl'][devId]['started']):
                                 self.pollingLogger.debug(u"dev_poll_check < self.globals['polling']['count']")
                                 indigo.devices[devId].setErrorStateOnServer(u"no ack")
                                 dev.updateStateOnServer(key='connected', value='false', clearErrorState=False)
-                                noAck = True  #  Indicate at least one light "not acknowledging" 
-                    if noAck:
-                        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_DISCOVERY, 'DISCOVERY', 0])  # Discover devices before polling LIFX devices for status updates
 
-
-                    self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_POLLING, 'STATUSPOLLING', 0])  # Poll LIFX devices for status updates
+                    self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_POLLING, 'STATUSPOLLING', 0])  # Poll nanoleaf devices for status updates
 
             self.pollingLogger.debug(u"Polling thread ending")
 

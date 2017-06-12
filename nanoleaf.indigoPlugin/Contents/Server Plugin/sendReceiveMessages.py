@@ -87,7 +87,6 @@ class ThreadSendReceiveMessages(threading.Thread):
                             if self.globals['nl'][nanoleafDevId]["started"] == True:
                                 self.sendReceiveDebugLogger.debug(u"Processing %s for %s" % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
                                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [nanoleafDevId]])
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'GETWIFIINFO', [nanoleafDevId]])
                                  
                         continue  
 
@@ -353,6 +352,8 @@ class ThreadSendReceiveMessages(threading.Thread):
 
         try:
             nanoleafDev = indigo.devices[nanoleafDevId]
+
+            self.globals['nl'][nanoleafDevId]['lastResponseToPollCount'] = self.globals['polling']['count']  # Set the current poll count (for 'no ack' check)
 
             if str(self.globals['nl'][nanoleafDevId]["auroraInfo"]['state']['on']['value']) == 'True':
                 onState = True
