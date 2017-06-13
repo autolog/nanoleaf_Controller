@@ -19,51 +19,58 @@ class Aurora(object):
     def __put(self, endpoint, data):
         url = self.baseUrl + endpoint
         try:
-            r = requests.put(url, json=data)
+            r = requests.put(url, timeout=5.0, json=data)
+        except requests.exceptions.Timeout:
+            return (False, 'Timeout occurred proccesing request', None)
         except requests.exceptions.RequestException as e:
-            print(e)
-            return
+            errorMsg = e.args[0].reason.message.split('>: ')[1]
+            return (False, errorMsg, None)
         return self.__check_for_errors(r)
 
     def __get(self, endpoint=""):
         url = self.baseUrl + endpoint
         try:
-            r = requests.get(url)
+            r = requests.get(url, timeout=5.0)
+        except requests.exceptions.Timeout:
+            return (False, 'Timeout occurred proccesing request', None)
         except requests.exceptions.RequestException as e:
-            print(e)
-            return
+            errorMsg = e.args[0].reason.message.split('>: ')[1]
+            return (False, errorMsg, None)
         return self.__check_for_errors(r)
+
 
     def __delete(self, endpoint=""):
         url = self.baseUrl + endpoint
         try:
-            r = requests.delete(url)
+            r = requests.delete(url, timeout=5.0)
+        except requests.exceptions.Timeout:
+            return (False, 'Timeout occurred proccesing request', None)
         except requests.exceptions.RequestException as e:
-            print(e)
-            return
+            errorMsg = e.args[0].reason.message.split('>: ')[1]
+            return (False, errorMsg, None)
         return self.__check_for_errors(r)
 
     def __check_for_errors(self, r):
         if r.status_code == 200:
             if r.text == "":  # BUG: Delete User returns 200, not 204 like it should, as of firmware 1.5.0
-                return None
-            return r.json()
+                return (True, 'OK', '')
+            return (True, 'OK', r.json())
         elif r.status_code == 204:
-            return None
+            return (True, 'OK', None)
         elif r.status_code == 403:
-            print("Error 400: Bad request! (" + self.ip_address + ")")
+            return (False, 'HTTP Error code 403: Bad request', None)
         elif r.status_code == 401:
-            print("Error 401: Not authorized! This is an invalid token for this Aurora (" + self.ip_address + ")")
+            return (False, 'HTTP Error code 401: Not authorized', None)
         elif r.status_code == 404:
-            print("Error 404: Resource not found! (" + self.ip_address + ")")
+            return (False, 'HTTP Error code 404: Resource not found', None)
         elif r.status_code == 422:
-            print("Error 422: Unprocessible Entity (" + self.ip_address + ")")
+            return (False, 'HTTP Error code 422: Unprocessible Entity', None)
         elif r.status_code == 500:
-            print("Error 500: Internal Server Error (" + self.ip_address + ")")
+            return (False, 'HTTP Error code 500: Internal Server Error', None)
         else:
-            print("ERROR! UNKNOWN ERROR " + str(r.status_code)
-                  + ". Please post an issue on the GitHub page: https://github.com/software-2/nanoleaf/issues")
-        return None
+            return (False, 'HTTP Error code ' + str(r.status_code) + ' unknown', None)
+        return (False, '__check_for_errors Error? - unable to process', None)
+
 
     ###########################################
     # General functionality methods
@@ -113,25 +120,49 @@ class Aurora(object):
         """Returns True if the device is on, False if it's off"""
         return self.__get("state/on/value")
 
-    @on.setter
-    def on(self, value):
-        """Turns the device on/off. True = on, False = off"""
-        data = {"on": value}
-        self.__put("state", data)
+    # @on.setter
+    # def on(self, value):
+    #     """Turns the device on/off. True = on, False = off"""
+    #     data = {"on": value}
+    #     self.__put("state", data)
 
     @property
     def off(self):
         """Returns True if the device is off, False if it's on"""
-        return not self.on
+        success, statusMsg, onState = self.on
+        if not success:
+            return success, statusMsg, onState
+        else:
+            return success, statusMsg, onState
 
-    @off.setter
-    def off(self, value):
-        """Turns the device on/off. True = off, False = on"""
-        self.on = not value
+    # @off.setter
+    # def off(self, value):
+    #     """Turns the device on/off. True = off, False = on"""
+    #     self.on = not value
 
-    def on_toggle(self):
-        """Switches the on/off state of the device"""
-        self.on = not self.on
+    # def on_toggle(self):
+    #     """Switches the on/off state of the device"""
+    #     self.on = not self.on
+
+    def set_off(self):
+        data = {"on": False}
+        return self.__put("state", data)
+
+    def set_on(self):
+        data = {"on": True}
+        return self.__put("state", data)
+
+    def toggle_on(self):
+        success, statusMsg, onState = self.on
+        if not success:
+            return success, statusMsg, onState
+        else:
+            if onState:
+                return self.set_off()
+            else:
+                return self.set_on()
+
+
 
     ###########################################
     # Brightness methods
@@ -142,11 +173,17 @@ class Aurora(object):
         """Returns the brightness of the device (0-100)"""
         return self.__get("state/brightness/value")
 
-    @brightness.setter
-    def brightness(self, level):
+    # @brightness.setter
+    # def brightness(self, level):
+    #     """Sets the brightness to the given level (0-100)"""
+    #     data = {"brightness": {"value": level}}
+    #     self.__put("state", data)
+
+    def set_brightness(self, level):   
         """Sets the brightness to the given level (0-100)"""
         data = {"brightness": {"value": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
+
 
     @property
     def brightness_min(self):
@@ -161,11 +198,11 @@ class Aurora(object):
     def brightness_raise(self, level):
         """Raise the brightness of the device by a relative amount (negative lowers brightness)"""
         data = {"brightness": {"increment": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
 
     def brightness_lower(self, level):
         """Lower the brightness of the device by a relative amount (negative raises brightness)"""
-        self.brightness_raise(-level)
+        return self.brightness_raise(-level)
 
     ###########################################
     # Hue methods
@@ -176,11 +213,17 @@ class Aurora(object):
         """Returns the hue of the device (0-360)"""
         return self.__get("state/hue/value")
 
-    @hue.setter
-    def hue(self, level):
+    # @hue.setter
+    # def hue(self, level):
+    #     """Sets the hue to the given level (0-360)"""
+    #     data = {"hue": {"value": level}}
+    #     self.__put("state", data)
+
+    def set_hue(self, level):
         """Sets the hue to the given level (0-360)"""
         data = {"hue": {"value": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
+
 
     @property
     def hue_min(self):
@@ -195,11 +238,11 @@ class Aurora(object):
     def hue_raise(self, level):
         """Raise the hue of the device by a relative amount (negative lowers hue)"""
         data = {"hue": {"increment": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
 
     def hue_lower(self, level):
         """Lower the hue of the device by a relative amount (negative raises hue)"""
-        self.hue_raise(-level)
+        return self.hue_raise(-level)
 
     ###########################################
     # Saturation methods
@@ -216,6 +259,11 @@ class Aurora(object):
         data = {"sat": {"value": level}}
         self.__put("state", data)
 
+    def set_saturation(self, level):
+        """Sets the saturation to the given level (0-100)"""
+        data = {"hue": {"value": level}}
+        return self.__put("state", data)
+
     @property
     def saturation_min(self):
         """Returns the minimum saturation possible. (This always returns 0)"""
@@ -229,11 +277,11 @@ class Aurora(object):
     def saturation_raise(self, level):
         """Raise the saturation of the device by a relative amount (negative lowers saturation)"""
         data = {"sat": {"increment": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
 
     def saturation_lower(self, level):
         """Lower the saturation of the device by a relative amount (negative raises saturation)"""
-        self.saturation_raise(-level)
+        return self.saturation_raise(-level)
 
     ###########################################
     # Color Temperature methods
@@ -249,6 +297,11 @@ class Aurora(object):
         """Sets the color temperature to the given level (0-100)"""
         data = {"ct": {"value": level}}
         self.__put("state", data)
+
+    def set_color_temperature(self, level):
+        """Sets the color temperature to the given level (0-100)"""
+        data = {"ct": {"value": level}}
+        return self.__put("state", data)
 
     @property
     def color_temperature_min(self):
@@ -267,11 +320,11 @@ class Aurora(object):
     def color_temperature_raise(self, level):
         """Raise the color temperature of the device by a relative amount (negative lowers color temperature)"""
         data = {"ct": {"increment": level}}
-        self.__put("state", data)
+        return self.__put("state", data)
 
     def color_temperature_lower(self, level):
         """Lower the color temperature of the device by a relative amount (negative raises color temperature)"""
-        self.color_temperature_raise(-level)
+        return self.color_temperature_raise(-level)
 
     ###########################################
     # Color RGB/HSB methods
@@ -282,13 +335,13 @@ class Aurora(object):
     @property
     def rgb(self):
         """The color of the device, as represented by 0-255 RGB values"""
-        hue = self.hue
-        saturation = self.saturation
-        brightness = self.brightness
+        success, statusMsg, hue = self.hue
+        success, statusMsg, saturation = self.saturation
+        success, statusMsg, brightness = self.brightness
         if hue is None or saturation is None or brightness is None:
-            return None
+            return False, "One or more of Hue/Saturation/Brightness is missing", None
         rgb = colorsys.hsv_to_rgb(hue / 360.0, saturation / 100.0, brightness / 100.0)
-        return [int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)]
+        return True, 'OK', [int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)]
 
     @rgb.setter
     def rgb(self, color):
@@ -304,6 +357,20 @@ class Aurora(object):
         brightness = int(hsv[2] * 100)
         data = {"hue": {"value": hue}, "sat": {"value": saturation}, "brightness": {"value": brightness}}
         self.__put("state", data)
+
+
+    def set_rgb(self, color):
+        """Set the color of the device, as represented by a list of 0-255 RGB values"""
+        try:
+            red, green, blue = color
+        except ValueError:
+            return False, "Color must have three values", None
+        hsv = colorsys.rgb_to_hsv(red / 255.0, green / 255.0, blue / 255.0)
+        hue = int(hsv[0] * 360)
+        saturation = int(hsv[1] * 100)
+        brightness = int(hsv[2] * 100)
+        data = {"hue": {"value": hue}, "sat": {"value": saturation}, "brightness": {"value": brightness}}
+        return self.__put("state", data)
 
     ###########################################
     # Layout methods
@@ -362,50 +429,55 @@ class Aurora(object):
         data = {"select": effect_name}
         self.__put("effects", data)
 
+    def set_effect(self, effect_name):
+        """Sets the active effect to the name specified"""
+        data = {"select": effect_name}
+        return self.__put("effects", data)
+
     @property
     def effects_list(self):
         """Returns a list of all effects stored on the device"""
         return self.__get("effects/effectsList")
 
-    def effect_random(self):
-        """Sets the active effect to a new random effect stored on the device.
+    # def effect_random(self):
+    #     """Sets the active effect to a new random effect stored on the device.
         
-        Returns the name of the new effect."""
-        effect_list = self.effects_list
-        active_effect = self.effect
-        if active_effect not in self._reserved_effect_names:
-            effect_list.remove(self.effect)
-        new_effect = random.choice(effect_list)
-        self.effect = new_effect
-        return new_effect
+    #     Returns the name of the new effect."""
+    #     effect_list = self.effects_list
+    #     active_effect = self.effect
+    #     if active_effect not in self._reserved_effect_names:
+    #         effect_list.remove(self.effect)
+    #     new_effect = random.choice(effect_list)
+    #     self.effect = new_effect
+    #     return new_effect
 
-    def effect_set_raw(self, effect_data):
-        """Sends a raw dict containing effect data to the device.
+    # def effect_set_raw(self, effect_data):
+    #     """Sends a raw dict containing effect data to the device.
 
-        The dict given must match the json structure specified in the API docs."""
-        data = {"write": effect_data}
-        self.__put("effects", data)
+    #     The dict given must match the json structure specified in the API docs."""
+    #     data = {"write": effect_data}
+    #     self.__put("effects", data)
 
-    def effect_details(self, name):
-        """Returns the dict containing details for the effect specified"""
-        data = {"write": {"command": "request",
-                          "animName": name}}
-        return self.__put("effects", data)
+    # def effect_details(self, name):
+    #     """Returns the dict containing details for the effect specified"""
+    #     data = {"write": {"command": "request",
+    #                       "animName": name}}
+    #     return self.__put("effects", data)
 
-    def effect_details_all(self):
-        """Returns a dict containing details for all effects on the device"""
-        data = {"write": {"command": "requestAll"}}
-        return self.__put("effects", data)
+    # def effect_details_all(self):
+    #     """Returns a dict containing details for all effects on the device"""
+    #     data = {"write": {"command": "requestAll"}}
+    #     return self.__put("effects", data)
 
-    def effect_delete(self, name):
-        """Removed the specified effect from the device"""
-        data = {"write": {"command": "delete",
-                          "animName": name}}
-        self.__put("effects", data)
+    # def effect_delete(self, name):
+    #     """Removed the specified effect from the device"""
+    #     data = {"write": {"command": "delete",
+    #                       "animName": name}}
+    #     self.__put("effects", data)
 
-    def effect_rename(self, old_name, new_name):
-        """Renames the specified effect saved on the device to a new name"""
-        data = {"write": {"command": "rename",
-                          "animName": old_name,
-                          "newName": new_name}}
-        self.__put("effects", data)
+    # def effect_rename(self, old_name, new_name):
+    #     """Renames the specified effect saved on the device to a new name"""
+    #     data = {"write": {"command": "rename",
+    #                       "animName": old_name,
+    #                       "newName": new_name}}
+    #     self.__put("effects", data)

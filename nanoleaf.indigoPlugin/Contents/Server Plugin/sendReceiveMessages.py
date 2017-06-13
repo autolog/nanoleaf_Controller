@@ -92,16 +92,26 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                     if nanoleafCommand == 'STATUS':
                         nanoleafDevId = nanoleafCommandParameters[0]
+                        nanoleafDev   = indigo.devices[nanoleafDevId]
 
                         if self.globals['nl'][nanoleafDevId]["started"] == True:
-                            self.sendReceiveDebugLogger.debug(u"Processing %s for '%s'" % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
-                            nanoleafDev = indigo.devices[nanoleafDevId]
+                            
+                            self.sendReceiveDebugLogger.debug(u"Processing %s for '%s'" % (nanoleafCommand, nanoleafDev.name))
                             ipAddress = self.globals['nl'][nanoleafDevId]["ipAddress"]
                             authToken = self.globals['nl'][nanoleafDevId]["authToken"]
                             self.globals['nl'][nanoleafDevId]["aurora"] = Aurora(ipAddress, authToken)  # May move this to discovery process?
-                            self.globals['nl'][nanoleafDevId]["auroraInfo"] = self.globals['nl'][nanoleafDevId]["aurora"].info
+                            self.sendReceiveDebugLogger.debug(u"STATUS DEBUG: Type = %s, Data1= %s" % (type(self.globals['nl'][nanoleafDevId]["aurora"]), self.globals['nl'][nanoleafDevId]["aurora"]))
 
-                            self.updateDeviceState(nanoleafDevId)
+                            success, statusMsg, self.globals['nl'][nanoleafDevId]["auroraInfo"] = self.globals['nl'][nanoleafDevId]["aurora"].info
+                            self.sendReceiveDebugLogger.debug(u"STATUS DEBUG: Success = %s, StatusMsg = %s" % (success, statusMsg))
+                            self.sendReceiveDebugLogger.debug(u"STATUS DEBUG: Type = %s, Data2= %s" % (type(self.globals['nl'][nanoleafDevId]["auroraInfo"]), self.globals['nl'][nanoleafDevId]["auroraInfo"]))
+
+                            if success:
+                                self.updateDeviceState(nanoleafDevId)
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem retrieving status for device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
+
 
                         continue
 
@@ -112,22 +122,17 @@ class ThreadSendReceiveMessages(threading.Thread):
                             self.sendReceiveDebugLogger.debug(u"Processing %s for '%s' " % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
 
                             if nanoleafCommand == 'ON':
-                                self.globals['nl'][nanoleafDevId]["aurora"].on = True
-                            elif nanoleafCommand == 'OFF':
-                                self.globals['nl'][nanoleafDevId]["aurora"].off = True
+                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_on()
+                            else:  # nanoleafCommand == 'OFF'
+                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_off()
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                        
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem turning %s the device '%s': %s" % (nanoleafCommand, nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
+
                         continue
-
-
-                    if nanoleafCommand == 'DISCOVERY_DELAYED':
-                        if 'DISCOVERY' in self.globals['discovery']['timer']:
-                            self.globals['discovery']['timer']['DISCOVERY'].cancel()
-
-                        self.globals['discovery']['timer']['DISCOVERY'] = threading.Timer(30.0, self.handleTimerDiscoveryCommand,[])
-                        self.globals['discovery']['timer']['DISCOVERY'].start()
-
 
                     if nanoleafCommand == 'DISCOVERY':
                         self.sendReceiveMonitorLogger.info(u"Discovering nanoleaf devices on network - this should take ~%s seconds . . ." % self.globals['discovery']['period'])
@@ -160,7 +165,6 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                         continue
 
-
                     if (nanoleafCommand == 'BRIGHTNESS'):
                         nanoleafDevId = nanoleafCommandParameters[0]
 
@@ -170,9 +174,13 @@ class ThreadSendReceiveMessages(threading.Thread):
                         if self.globals['nl'][nanoleafDevId]["started"] == True:
                             self.sendReceiveDebugLogger.debug(u"Processing %s for '%s' " % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].brightness = targetBrightness
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_brightness(targetBrightness)
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem setting brightness of device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
                         
                         continue
 
@@ -185,9 +193,13 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                             self.sendReceiveDebugLogger.debug(u"Processing %s for '%s' " % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].brightness_lower(targetDimBy)
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].brightness_lower(targetDimBy)
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem dimming the device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
 
                         continue
 
@@ -200,9 +212,13 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                             self.sendReceiveDebugLogger.debug(u"Processing %s for '%s' " % (nanoleafCommand, indigo.devices[nanoleafDevId].name))
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].brightness_raise(targetBrightenBy)
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].brightness_raise(targetBrightenBy)
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem brightening the device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
 
                         continue
 
@@ -212,10 +228,20 @@ class ThreadSendReceiveMessages(threading.Thread):
                         if self.globals['nl'][nanoleafDevId]["started"] == True:
                             nanoleafDev = indigo.devices[nanoleafDevId]
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].color_temperature =  int(targetWhiteTemperature)
-                            self.globals['nl'][nanoleafDevId]["aurora"].brightness =  int(targetWhiteLevel)
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_color_temperature(int(targetWhiteTemperature))
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_brightness(int(targetWhiteLevel))
+                                if success:
+                                    self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+
+                                else:
+                                    self.sendReceiveDebugLogger.error(u"Problem setting white level for device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                    self.communicationProblem(nanoleafDev) 
+
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem setting white temperature for device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
 
                         continue
 
@@ -231,11 +257,13 @@ class ThreadSendReceiveMessages(threading.Thread):
                             green = int((targetGreenLevel*255.0)/100.0)
                             blue = int((targetBlueLevel*255.0)/100.0)
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].rgb =  [red, green, blue]
-                            #self.globals['nl'][nanoleafDevId]["aurora"].saturation =  int(targetSaturation)
-                            #self.globals['nl'][nanoleafDevId]["aurora"].brightness =  int(targetBrightness)
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_rgb([red, green, blue])
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem setting the color on the device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
 
                         continue
 
@@ -251,9 +279,13 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                             nanoleafDev = indigo.devices[nanoleafDevId]
 
-                            self.globals['nl'][nanoleafDevId]["aurora"].effect = effect
+                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["aurora"].set_effect(effect)
 
-                            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            if success:
+                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
+                            else:
+                                self.sendReceiveDebugLogger.error(u"Problem setting the effect on the device '%s': %s" % (nanoleafDev.name, statusMsg))
+                                self.communicationProblem(nanoleafDev) 
 
                         continue
 
@@ -274,74 +306,7 @@ class ThreadSendReceiveMessages(threading.Thread):
 
         self.sendReceiveDebugLogger.debug(u"NANOLEAF Send Receive Message Thread ended.")   
 
-    def clearStatusTimer(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: ThreadSendReceiveMessages")
-
-        if 'STATUS' in self.globals['deviceTimers'][dev.id]:
-            self.globals['deviceTimers'][dev.id]['STATUS'].cancel()
-
-    def handleTimerRepeatingQueuedStatusCommand(self, dev, seconds):
-        self.methodTracer.threaddebug(u"CLASS: ThreadSendReceiveMessages")
-
-        try: 
-            self.sendReceiveDebugLogger.debug(u'Timer for %s [%s] invoked for repeating queued message STATUS - %s seconds left' % (dev.name, dev.address, seconds))
-
-            try:
-                del self.globals['deviceTimers'][dev.id]['STATUS']
-            except:
-                pass
-
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [dev.id]])
-
-            if seconds > 0:
-                seconds -= 1
-                self.globals['deviceTimers'][dev.id]['STATUS'] = threading.Timer(1.0, self.handleTimerRepeatingQueuedStatusCommand, [dev, seconds])
-                self.globals['deviceTimers'][dev.id]['STATUS'].start()
-
-        except StandardError, e:
-            self.sendReceiveDebugLogger.error(u"handleTimerRepeatingQueuedStatusCommand error detected. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
-
-    def handleTimerDiscoveryCommand(self):
-        self.methodTracer.threaddebug(u"CLASS: ThreadSendReceiveMessages")
-
-        try:
-            self.sendReceiveDebugLogger.debug(u'Timer for Discovery invoked to discover NANOLEAF devices)')
-
-            try:
-                del self.globals['discoveryTimer']['DISCOVERY']
-            except:
-                pass
-
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
-
-
-        except StandardError, e:
-            self.sendReceiveDebugLogger.error(u"handleTimerDiscoveryCommand error detected. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
-
-
-    def clearWaveformOffTimer(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: ThreadSendReceiveMessages")
-
-        if 'WAVEFORM_OFF' in self.globals['deviceTimers'][dev.id]:
-            self.globals['deviceTimers'][dev.id]['WAVEFORM_OFF'].cancel()
-
-    def handleTimerWaveformOffCommand(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: ThreadSendReceiveMessages")
-
-        try: 
-            self.sendReceiveDebugLogger.debug(u'Timer for %s [%s] invoked to turn off NANOLEAF device (Used by Waveform)' % (dev.name, dev.address))
-
-            try:
-                del self.globals['deviceTimers'][dev.id]['WAVEFORM_OFF']
-            except:
-                pass
-
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'WAVEFORM_OFF', [dev.id]])
-
-        except StandardError, e:
-            self.sendReceiveDebugLogger.error(u"handleTimerRepeatingQueuedStatusCommand error detected. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
-
-    def communicationLost(self, argNanoleafDev):
+    def communicationProblem(self, argNanoleafDev):
         if argNanoleafDev.states['connected'] == True:
             argNanoleafDev.updateStateOnServer(key='connected', value=False)
             argNanoleafDev.setErrorStateOnServer(u"no ack")
@@ -373,7 +338,11 @@ class ThreadSendReceiveMessages(threading.Thread):
                 brightnessLevel = brightness
             colorTemperature = int(self.globals['nl'][nanoleafDevId]["auroraInfo"]['state']['ct']['value'])
 
-            rgb = self.globals['nl'][nanoleafDevId]["aurora"].rgb
+            success, statusMsg, rgb = self.globals['nl'][nanoleafDevId]["aurora"].rgb
+            if not success:
+                self.sendReceiveMonitorLogger.error(u"Status not updated for '%s': RGB conversion for device update with error '%s'" % (nanoleafDev.name, statusMsg))
+                return  
+
             red, green, blue = [int((rgb[0] * 100)/255), int((rgb[1] * 100)/255), int((rgb[2] * 100)/255)]
 
             self.globals['nl'][nanoleafDevId]['effectsList'] = self.globals['nl'][nanoleafDevId]["auroraInfo"]['effects']['effectsList']
@@ -426,7 +395,9 @@ class ThreadSendReceiveMessages(threading.Thread):
             if nanoleafDev.model != model:
                 nanoleafDev.model = str(model)
                 nanoleafDev.replaceOnServer()
+
+            self.globals['nl'][nanoleafDevId]['lastResponseToPollCount'] = self.globals['polling']['count']  # Set the current poll count (for 'no ack' check)
  
         except StandardError, e:
-            self.sendReceiveDebugLogger.error(u"StandardError detected in 'handleNanoleafLampMessage'. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
+            self.sendReceiveDebugLogger.error(u"StandardError detected in 'updateDeviceState'. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
 

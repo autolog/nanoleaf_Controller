@@ -79,15 +79,11 @@ class Plugin(indigo.PluginBase):
         self.globals['threads']['sendReceiveMessages'] = {}
         self.globals['threads']['polling'] = {}
 
-        # Initialise discovery dictionary to store discovered devices, discovery period & timer
+        # Initialise discovery dictionary to store discovered devices, discovery period
         self.globals['discovery'] = {}
         self.globals['discovery']['discoveredDevices'] = {}  # dict of nanoleaf device ids (psuedo mac) and IP Addresses
         self.globals['discovery']['discoveredUnmatchedDevices'] = {}  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and IP Addresses
         self.globals['discovery']['period'] = 30
-        self.globals['discovery']['timer'] = {}
-
-        # Initialise dictionary to store per-lamp timers
-        self.globals['deviceTimers'] = {}
 
         # Initialise dictionary to store message queues
         self.globals['queues'] = {}
@@ -415,14 +411,6 @@ class Plugin(indigo.PluginBase):
             if 'sendReceiveMessages' in self.globals['threads']:
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
 
-            # Cancel any existing timers
-            for nanoleafDevId in self.globals['deviceTimers']:
-                for timer in self.globals['deviceTimers'][nanoleafDevId]:
-                    self.globals['deviceTimers'][nanoleafDevId][timer].cancel()
-
-            if 'DISCOVERY' in self.globals['discovery']['timer']:
-                self.globals['discovery']['timer']['DISCOVERY'].cancel()
-
             if self.globals['polling']['threadActive'] == True:
                 self.globals['polling']['forceThreadEnd'] = True
                 self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
@@ -525,13 +513,6 @@ class Plugin(indigo.PluginBase):
             self.globals['nl'][dev.id]['effectsList']             = []
             dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status i.e. communication still to be established
 
-            # Cancel any existing device timers (just in case)
-            if dev.id in self.globals['deviceTimers']:
-                for timer in self.globals['deviceTimers'][dev.id]:
-                    self.globals['deviceTimers'][dev.id][timer].cancel()
-            # Initialise nanoleaf Device Timers dictionary
-            self.globals['deviceTimers'][dev.id] = {}
-
             # Check if ip address debug filter(s) active
             if (len(self.globals['debug']['debugFilteredIpAddresses']) > 0) and (dev.states['ipAddress'] not in self.globals['debug']['debugFilteredIpAddresses']):
                 self.generalLogger.info(u"Start NOT performed for  '%s' as nanoleaf device with ip address '%s' not included in start filter" % (dev.name, dev.states['ipAddress']))
@@ -567,10 +548,6 @@ class Plugin(indigo.PluginBase):
         if dev.id in self.globals['nl']:
             self.globals['nl'][dev.id]["started"] = False
 
-        # Cancel any existing timers
-        if dev.id in self.globals['deviceTimers']:
-            for timer in self.globals['deviceTimers'][dev.id]:
-                self.globals['deviceTimers'][dev.id][timer].cancel()
 
     def deviceDeleted(self, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
@@ -852,7 +829,7 @@ class Plugin(indigo.PluginBase):
                     if 'blueLevel' in action.actionValue:
                         blueLevel = float(action.actionValue['blueLevel'])
 
-                    self.generalLogger.info(u"Color: \"%s\" R, G, B: %s, %s, %s" % (dev.name, redLevel, greenLevel, blueLevel))
+                    self.generalLogger.debug(u"Color: \"%s\" R, G, B: %s, %s, %s" % (dev.name, redLevel, greenLevel, blueLevel))
 
                     self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'COLOR', [dev.id, redLevel, greenLevel, blueLevel]])
 
