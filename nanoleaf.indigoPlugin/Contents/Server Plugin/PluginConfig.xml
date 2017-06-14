@@ -86,6 +86,14 @@
         <Label>Debug Send / Receive:</Label>
         <Description>Debug 'send / Receive to nanoleaf devices' processing.</Description>
     </Field>
+    <Field type="checkbox" id="monitorDiscovery" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Monitor Discovery:</Label>
+        <Description>Monitor discovery of nanoleaf devices.</Description>
+    </Field>
+    <Field type="checkbox" id="debugDiscovery" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Debug Discovery:</Label>
+        <Description>Debug 'discovery of nanoleaf devices' processing.</Description>
+    </Field>
     <Field type="checkbox" id="debugMethodTrace" default="false" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>Method Trace:</Label>
         <Description>Trace Method calls.</Description>

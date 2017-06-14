@@ -134,37 +134,6 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                         continue
 
-                    if nanoleafCommand == 'DISCOVERY':
-                        self.sendReceiveMonitorLogger.info(u"Discovering nanoleaf devices on network - this should take ~%s seconds . . ." % self.globals['discovery']['period'])
-
-                        self.globals['discovery']['discoveredUnmatchedDevices'] = {}                        
-                        self.globals['discovery']['discoveredDevices'] = {}                        
-                        rc, statusMessage, self.globals['discovery']['discoveredDevices'] = discover_auroras(self.globals['discovery']['period'])  # discover nanoleaf Auroras on network
-                        self.sendReceiveMonitorLogger.debug(u"nanoleaf Discovery result: %s, %s = %s" % (rc, statusMessage, self.globals['discovery']['discoveredDevices']))
-
-                        if rc:  # Return code = True = OK
-                            if len(self.globals['discovery']['discoveredDevices']) > 0:
-                                for nlDeviceid, nlIpAddress in self.globals['discovery']['discoveredDevices'].iteritems():
-                                    nlDeviceid = str(nlDeviceid)
-                                    nlIpAddress = str(nlIpAddress)
-                                    nanoleafDeviceMatchedtoIndigoDevice = False
-                                    for devId in self.globals['nl']:
-                                        if self.globals['nl'][devId]['nlDeviceid'] != '':
-                                            if nlDeviceid == self.globals['nl'][devId]['nlDeviceid']:
-                                                nanoleafDeviceMatchedtoIndigoDevice = True
-                                                break
-                                    if not nanoleafDeviceMatchedtoIndigoDevice:
-                                        self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = nlIpAddress
-                                        self.sendReceiveMonitorLogger.info(u'new nanoleaf device [%s] discovered at address: %s and not yet assigned to Indigo device' % (nlDeviceid, nlIpAddress))
-                                    else:
-                                        self.sendReceiveMonitorLogger.info(u"known nanoleaf device [%s] discovered at address: %s and already assigned to Indigo device '%s'" % (nlDeviceid, nlIpAddress, indigo.devices[devId].name))
-                            else:
-                                self.sendReceiveMonitorLogger.error(u"Discovering nanoleaf devices failed to find any nanoleaf devices. Make sure nanoleaf is switched on, has been connected to network and is accessible from nanoleaf App")
-                        else:
-                            self.sendReceiveMonitorLogger.error(u"Discovering nanoleaf devices failed: %s" % statusMessage)
-
-                        continue
-
                     if (nanoleafCommand == 'BRIGHTNESS'):
                         nanoleafDevId = nanoleafCommandParameters[0]
 

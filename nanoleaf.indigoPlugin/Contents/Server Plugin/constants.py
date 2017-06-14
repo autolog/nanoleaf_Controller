@@ -8,9 +8,6 @@
 
 PLUGIN_TITLE = "Autolog 'nanoleaf V1 Controller'"
 
-# Number of discoveries to executed at start-up
-START_UP_REQUIRED_DISCOVERY_COUNT = 10 
-
 # QUEUE Priorities
 QUEUE_PRIORITY_STOP_THREAD   = 0
 QUEUE_PRIORITY_WAVEFORM      = 100

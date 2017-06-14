@@ -26,6 +26,7 @@ from nanoleaf.aurora import *
 from nanoleaf.discover import *
 from polling import ThreadPolling
 from sendReceiveMessages import ThreadSendReceiveMessages
+from discovery import ThreadDiscovery
 
 
 
@@ -42,17 +43,21 @@ class Plugin(indigo.PluginBase):
 
         # Initialise dictionary for debug in plugin Globals
         self.globals['debug'] = {}
-        self.globals['debug']['monitorDebugEnabled']  = False  # if False it indicates no debugging is active else it indicates that at least one type of debug is active
-        self.globals['debug']['debugFilteredIpAddresses'] = []  # Set to nanoleaf IP Address(es) to limit processing for debug purposes
+        self.globals['debug']['monitorDebugEnabled']        = False  # if False it indicates no debugging is active else it indicates that at least one type of debug is active
+        self.globals['debug']['debugFilteredIpAddresses']   = []  # Set to nanoleaf IP Address(es) to limit processing for debug purposes
         self.globals['debug']['debugFilteredIpAddressesUI'] = ''  # Set to nanoleaf IP Address(es) to limit processing for debug purposes (UI version)
-        self.globals['debug']['debugGeneral']         = logging.INFO  # For general debugging of the main thread
-        self.globals['debug']['monitorSendReceive']   = logging.INFO  # For monitoring messages sent to nanoleaf devices
-        self.globals['debug']['debugSendReceiveSend'] = logging.INFO  # For debugging messages sent to nanoleaf devices
-        self.globals['debug']['debugMethodTrace']     = logging.INFO  # For displaying method invocations i.e. trace method
-        self.globals['debug']['debugPolling']         = logging.INFO  # For polling debugging
+        self.globals['debug']['debugGeneral']               = logging.INFO  # For general debugging of the main thread
+        self.globals['debug']['monitorSendReceive']         = logging.INFO  # For monitoring messages sent to nanoleaf devices
+        self.globals['debug']['debugSendReceive']           = logging.INFO  # For debugging messages sent to nanoleaf devices
+        self.globals['debug']['monitorDiscovery']           = logging.INFO  # For monitoring discovery of nanoleaf devices
+        self.globals['debug']['debugDiscovery']             = logging.INFO  # For debugging discovery of nanoleaf devices
+        self.globals['debug']['debugMethodTrace']           = logging.INFO  # For displaying method invocations i.e. trace method
+        self.globals['debug']['debugPolling']               = logging.INFO  # For polling debugging
         self.globals['debug']['previousDebugGeneral']       = logging.INFO  # For general debugging of the main thread
         self.globals['debug']['previousMonitorSendReceive'] = logging.INFO  # For monitoring messages sent to nanoleaf devices 
         self.globals['debug']['previousDebugSendReceive']   = logging.INFO  # For debugging messages sent to nanoleaf devices
+        self.globals['debug']['previousMonitorDiscovery']   = logging.INFO  # For monitoring discovery of nanoleaf devices 
+        self.globals['debug']['previousDebugDiscovery']     = logging.INFO  # For debugging  discovery of  nanoleaf devices
         self.globals['debug']['previousDebugMethodTrace']   = logging.INFO  # For displaying method invocations i.e. trace method
         self.globals['debug']['previousDebugPolling']       = logging.INFO  # For polling debugging
 
@@ -69,9 +74,8 @@ class Plugin(indigo.PluginBase):
         # Now logging is set-up, output Initialising Message
         self.generalLogger.info(u"%s initializing . . ." % PLUGIN_TITLE)
 
-        # Count of number of discoveries performed
-        self.globals['discoveryCount'] = 0  
-
+        
+        
         # Initialise dictionary to store internal details about nanoleaf devices
         self.globals['nl'] = {} 
 
@@ -83,11 +87,13 @@ class Plugin(indigo.PluginBase):
         self.globals['discovery'] = {}
         self.globals['discovery']['discoveredDevices'] = {}  # dict of nanoleaf device ids (psuedo mac) and IP Addresses
         self.globals['discovery']['discoveredUnmatchedDevices'] = {}  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and IP Addresses
-        self.globals['discovery']['period'] = 30
+        self.globals['discovery']['period'] = 30  # period of each active discovery
+        self.globals['discovery']['count'] = 0  # count of number of discoveries performed
 
         # Initialise dictionary to store message queues
         self.globals['queues'] = {}
         self.globals['queues']['messageToSend'] = ''  # Set-up in plugin start (used to process commands to be sent to the nanoleaf device)
+        self.globals['queues']['discovery'] = ''  # Set-up in plugin start (used to process command to invoke nanoleaf device discovery)
         self.globals['queues']['returnedResponse'] = '' # Set-up in plugin start (a common returned response queue)
         self.globals['queues']['initialised'] = False
 
@@ -156,11 +162,14 @@ class Plugin(indigo.PluginBase):
 
         # Create process queues
         self.globals['queues']['messageToSend'] = Queue.PriorityQueue()  # Used to queue commands to be sent to nanoleaf devices
+        self.globals['queues']['discovery'] = Queue.PriorityQueue()  # Used to queue command for nanoleaf device discovery
         self.globals['queues']['initialised'] = True
 
-        # define and start threads that will send messages to & receive messages from the nanoleaf devices
+        # define and start threads that will send messages to & receive messages from the nanoleaf devices and handle discovery
         self.globals['threads']['sendReceiveMessages'] = ThreadSendReceiveMessages([self.globals])
         self.globals['threads']['sendReceiveMessages'].start()
+        self.globals['threads']['discovery'] = ThreadDiscovery([self.globals])
+        self.globals['threads']['discovery'].start()
 
         if self.globals['polling']['status'] == True and self.globals['polling']['threadActive'] == False:
             self.globals['threads']['polling']['event']  = threading.Event()
@@ -169,7 +178,7 @@ class Plugin(indigo.PluginBase):
 
         self.globals['discovery']['period'] = float(self.pluginPrefs.get("defaultDiscoveryPeriod", 30))
 
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
+        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
  
         self.globals['startupCompleted'] = True  # Enable runConcurrentThread to commence processing
 
@@ -312,6 +321,8 @@ class Plugin(indigo.PluginBase):
         self.globals['debug']['debugGeneral']       = logging.INFO  # For general debugging of the main thread
         self.globals['debug']['monitorSendReceive'] = logging.INFO  # For logging messages sent & Received to/from nanoleaf devices
         self.globals['debug']['debugSendReceive']   = logging.INFO  # For debugging messages sent & Received to/from nanoleaf devices
+        self.globals['debug']['monitorDiscovery']   = logging.INFO  # For logging discovery of nanoleaf devices
+        self.globals['debug']['debugDiscovery']     = logging.INFO  # For debugging discovery of nanoleaf devices
         self.globals['debug']['debugMethodTrace']   = logging.INFO  # For displaying method invocations i.e. trace method
         self.globals['debug']['debugPolling']       = logging.INFO  # For polling debugging
 
@@ -323,6 +334,8 @@ class Plugin(indigo.PluginBase):
         debugGeneral           = bool(valuesDict.get("debugGeneral", False))
         monitorSendReceive     = bool(valuesDict.get("monitorSendReceive", False))
         debugSendReceive       = bool(valuesDict.get("debugSendReceive", False))
+        monitorDiscovery       = bool(valuesDict.get("monitorDiscovery", False))
+        debugDiscovery         = bool(valuesDict.get("debugDiscovery", False))
         debugMethodTrace       = bool(valuesDict.get("debugMethodTrace", False))
         debugPolling           = bool(valuesDict.get("debugPolling", False))
 
@@ -333,6 +346,10 @@ class Plugin(indigo.PluginBase):
             self.globals['debug']['monitorSendReceive'] = logging.DEBUG  # For logging messages sent to nanoleaf devices 
         if debugSendReceive:
             self.globals['debug']['debugSendReceive'] = logging.DEBUG  # For debugging messages sent to nanoleaf devices
+        if monitorDiscovery:
+            self.globals['debug']['monitorDiscovery'] = logging.DEBUG  # For logging messages sent to nanoleaf devices 
+        if debugDiscovery:
+            self.globals['debug']['debugDiscovery'] = logging.DEBUG  # For debugging messages sent to nanoleaf devices
         if debugMethodTrace:
             self.globals['debug']['debugMethodTrace'] = logging.THREADDEBUG  # For displaying method invocations i.e. trace method
         if debugPolling:
@@ -340,7 +357,7 @@ class Plugin(indigo.PluginBase):
 
         self.globals['debug']['monitoringActive'] = monitorSendReceive
 
-        self.globals['debug']['debugActive'] = debugGeneral or debugSendReceive or debugMethodTrace or debugPolling
+        self.globals['debug']['debugActive'] = debugGeneral or debugSendReceive or debugDiscovery or debugMethodTrace or debugPolling
 
         if not self.globals['debug']['monitorDebugEnabled'] or (not self.globals['debug']['monitoringActive'] and not self.globals['debug']['debugActive']):
             self.generalLogger.info(u"No monitoring or debugging requested")
@@ -351,6 +368,8 @@ class Plugin(indigo.PluginBase):
                 monitorTypes = []
                 if monitorSendReceive:
                     monitorTypes.append('Send & Receive')
+                if monitorDiscovery:
+                    monitorTypes.append('Discovery')
                 message = self.listActive(monitorTypes)   
                 self.generalLogger.warning(u"Monitoring enabled for nanoleaf device: %s" % (message))  
 
@@ -362,6 +381,8 @@ class Plugin(indigo.PluginBase):
                     debugTypes.append('General')
                 if debugSendReceive:
                     debugTypes.append('Send & Receive')
+                if debugDiscovery:
+                    debugTypes.append('Discovery')
                 if debugMethodTrace:
                     debugTypes.append('Method Trace')
                 if debugPolling:
@@ -411,6 +432,9 @@ class Plugin(indigo.PluginBase):
             if 'sendReceiveMessages' in self.globals['threads']:
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
 
+            if 'discovery' in self.globals['threads']:
+                self.globals['queues']['discovery'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
+
             if self.globals['polling']['threadActive'] == True:
                 self.globals['polling']['forceThreadEnd'] = True
                 self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
@@ -421,6 +445,11 @@ class Plugin(indigo.PluginBase):
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
                 self.globals['threads']['sendReceiveMessages'].join(7.0)  # wait for thread to end
                 self.generalLogger.debug(u"SendReceive thread now stopped")
+
+            if 'discovery' in self.globals['threads']:
+                self.globals['queues']['discovery'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
+                self.globals['threads']['discovery'].join(7.0)  # wait for thread to end
+                self.generalLogger.debug(u"Discovery thread now stopped")
 
         self.generalLogger.debug(u". . . runConcurrentThread now ended")   
 
@@ -548,11 +577,19 @@ class Plugin(indigo.PluginBase):
     def deviceDeleted(self, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
+        nlDeviceid = ''
+        nlIpAddress = ''
+
         if dev.deviceTypeId == "nanoleafDevice": 
             self.deviceStopComm(dev)
             if dev.id in self.globals['nl']:
+                nlDeviceid = self.globals['nl'][dev.id]['nlDeviceid']
+                nlIpAddress = self.globals['nl'][dev.id]['ipAddress']
                 del self.globals['nl'][dev.id]  # Delete internal storage for device
 
+        if nlDeviceid != '' and nlIpAddress != '':
+            # Make device available for adding as a new device
+            self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = nlIpAddress            
 
     def getDeviceConfigUiValues(self, pluginProps, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
@@ -789,9 +826,16 @@ class Plugin(indigo.PluginBase):
         try:
             self.generalLogger.debug(u'processSetColorLevels ACTION:\n%s ' % action)
 
-            if ('whiteLevel' in action.actionValue) or ('whiteTemperature' in action.actionValue):
-                # If either of 'whiteLevel' or 'whiteTemperature' are altered - assume mode is White
+            # Determine Color / White Mode
+            colorMode = False
 
+            # First check if color is being set by the action Set RGBW levels
+            if 'redLevel' in action.actionValue and 'greenLevel' in action.actionValue and 'blueLevel' in action.actionValue:
+                if float(action.actionValue['redLevel']) > 0.0 or float(action.actionValue['greenLevel']) > 0.0 or float(action.actionValue['blueLevel']) > 0.0:
+                    colorMode = True
+
+            if (not colorMode) and (('whiteLevel' in action.actionValue) or ('whiteTemperature' in action.actionValue)):
+                # If either of 'whiteLevel' or 'whiteTemperature' are altered - assume mode is White
                 whiteLevel = float(dev.states['whiteLevel'])
                 whiteTemperature =  int(dev.states['whiteTemperature'])
 
@@ -841,7 +885,7 @@ class Plugin(indigo.PluginBase):
     def processDiscoverDevices(self, pluginAction):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
             
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
+        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
 
     def processSetEffect(self, pluginAction, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
