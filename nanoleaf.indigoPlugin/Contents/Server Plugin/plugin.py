@@ -518,10 +518,6 @@ class Plugin(indigo.PluginBase):
                 self.generalLogger.info(u"Start NOT performed for  '%s' as nanoleaf device with ip address '%s' not included in start filter" % (dev.name, dev.states['ipAddress']))
                 return
 
-
-            self.globals['nl'][dev.id]['ipAddress'] = '192.168.1.90'  # ** TEMP ** TEMP ** TEMP ** TEMP ** TEMP ** TEMP **
-            # self.globals['nl'][dev.id]['authToken'] = 'bBIMTrNX79EF8PrnWkuookgg5gkakc7L'  # ** TEMP ** TEMP ** TEMP ** TEMP ** TEMP ** TEMP **
-
             self.globals['nl'][dev.id]['onState']     = False      # True or False
             self.globals['nl'][dev.id]['onOffState']  = 'off'      # 'on' or 'off'
             #self.globals['nl'][dev.id]['turnOnIfOff'] = bool(dev.pluginProps.get('turnOnIfOff', True))
