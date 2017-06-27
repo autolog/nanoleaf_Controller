@@ -8,9 +8,23 @@
         <Label>Copyright © 2017 Autolog</Label>
     </Field>
 
-    <Field id="separator-1" type="separator"/>  
+    <Field id="separator-1" type="separator" visibleBindingValue="true"/>
 
-    <Field id="help-1" type="label">
+     <Field type="checkbox" id="overrideHostIpAddress" default="false" alwaysUseInDialogHeightCalc="true">
+        <Label>Override Host IP Address:</Label>
+        <Description>Check to enable Host IP Address input.</Description>
+    </Field>
+    <Field id="help-1" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+        <Label>^ If you tick this box, then you can specify the host address that the Nanoleaf plugin will use rather than discovering it automatically. Not normally needed but can help in problem situations. It is your responsibility to specify it correctly e.g. '192.168.1.100' (no quotes). Reload the Plugin after saving this change.</Label>
+    </Field>
+    
+     <Field type="textfield" id="overriddenHostIpAddress" default="" visibleBindingId="overrideHostIpAddress" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Host IP Address:</Label>
+    </Field>
+
+    <Field id="separator-2" type="separator"/>  
+
+    <Field id="help-2" type="label">
         <Label>Use status polling to update the state of the nanonleaf device(s) periodically.</Label>
     </Field>
     <Field type="checkbox" id="statusPolling" defaultValue="false" tooltip="Tick to turn on polling of all nanonleaf devices">
@@ -30,30 +44,30 @@
     <Field id="missedPollLimit" type="textfield" defaultValue="1" enabledBindingId="statusPolling" tooltip="Set number of polls after which if no contact, a nanoleaf device will be flagged with a 'no ack'">
         <Label>Max polls missed limit?:</Label>
     </Field>
-    <Field id="help-2" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
-        <Label>Specify maximum number of polls allowed to be missed before a nanoleaf device will be flagged with a 'no ack'</Label>
+    <Field id="help-3" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+        <Label>Specify maximum number of polls allowed to be missed before a Nanoleaf device will be flagged with a 'no ack'</Label>
     </Field>
 
-    <Field id="separator-2" type="separator"/>  
+    <Field id="separator-3" type="separator"/>  
 
     <Field id="defaultDiscoveryPeriodLabel" type="label">
-        <Label>Default timeout to use when discovering nanoleaf devices.</Label>
+        <Label>Default timeout to use when discovering Nanoleaf devices.</Label>
     </Field>
     <Field type="textfield" id="defaultDiscoveryPeriod" defaultValue="30">
         <Label>Discovery Timeout:</Label>
     </Field>
 
-    <Field id="help-3" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+    <Field id="help-4" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
         <Label>Specify discovery timeout in seconds e.g 10</Label>
     </Field>
 
-    <Field id="separator-3" type="separator"/>  
-    <Field id="help-4" type="label">
+    <Field id="separator-4" type="separator"/>  
+    <Field id="help-5" type="label">
         <Label>Use Update Check to check for a new release of the nanoleaf Controller plugin on Github. Use plugin menu to update plugin.</Label>
     </Field>
     <Field type="checkbox" id="updateCheck" defaultValue="true" tooltip="Tick to turn on checking for new nanoleaf Controller plugin version">
         <Label>Check for updates:</Label>
-        <Description>Enable to check for new version of nanoleaf Controller plugin.</Description>
+        <Description>Enable to check for new version of Nanoleaf Controller plugin.</Description>
     </Field>
     <Field id="checkFrequency" type="menu" defaultValue="DAILY" enabledBindingId="updateCheck" tooltip="Select update check frequency">
         <Label>Check Frequency:</Label>
@@ -62,16 +76,16 @@
             <Option value="WEEKLY">Check every week</Option>
         </List>
     </Field>
-    <Field id="separator-4" type="separator"/>  
+    <Field id="separator-5" type="separator"/>  
 
     <Field type="checkbox" id="monitorDebugEnabled" default="false">
         <Label>Monitoring / debugging:</Label>
         <Description>Enable monitoring and debugging options.</Description>
     </Field>
 
-    <Field id="separator-5" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
+    <Field id="separator-6" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
 
-    <Field id="help-5" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+    <Field id="help-6" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>Select monitoring / debugging to be performed by ticking required option(s) below and then clicking Save.</Label>
     </Field>
     <Field type="checkbox" id="debugGeneral" defaultValue="false"  visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" tooltip="Enable logging of detailed debugging info." alwaysUseInDialogHeightCalc="true">
@@ -103,12 +117,12 @@
         <Description>Debug 'polling' processing.</Description>
     </Field>
 
-    <Field id="separator-6" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
+    <Field id="separator-7" type="separator" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true"/> 
 
     <Field type="textfield" id="debugFilteredIpAddresses" defaultValue="" visibleBindingId="monitorDebugEnabled" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>nanoleaf device Filter IP Address(es):</Label>
     </Field>
-    <Field id="help-6" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+    <Field id="help-7" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
         <Label>Used for debugging only, in order to constrain processing to specific nanoleaf devices.</Label>
     </Field>
 

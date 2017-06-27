@@ -38,6 +38,8 @@ class Plugin(indigo.PluginBase):
         # Initialise dictionary to store plugin Globals
         self.globals = {}
 
+        self.globals['overriddenHostIpAddress'] = ''  # If needed, set in Plugin config
+
         # Used to prevent runConcurrentThread from running until startup is complete
         self.globals['startupCompleted'] = False
 
@@ -115,8 +117,10 @@ class Plugin(indigo.PluginBase):
         # Initialise dictionary for update checking
         self.globals['update'] = {}
 
-        self.validatePrefsConfigUi(pluginPrefs)  # Validate the Plugin Config
+        self.validatePrefsConfigUi(pluginPrefs)  # Validate the Plugin Config before plugin initialisation
         
+        self.closedPrefsConfigUi(pluginPrefs, False)  # Set Plugin config options (as if the dialogue had been closed)
+
         self.setDebuggingLevels(pluginPrefs)  # Check monitoring / debug / filtered IP address options
 
     def __del__(self):
@@ -199,6 +203,14 @@ class Plugin(indigo.PluginBase):
 
         try: 
 
+            if 'overrideHostIpAddress' in valuesDict:
+                if bool(valuesDict.get('overrideHostIpAddress', False)):
+                    if valuesDict.get('overriddenHostIpAddress', '') == '':
+                        errorDict = indigo.Dict()
+                        errorDict["overriddenHostIpAddress"] = "Host IP Address missing"
+                        errorDict["showAlertText"] = "You have elected to override the Host Ip Address but haven't specified it!"
+                        return (False, valuesDict, errorDict)
+
             if "updateCheck" in valuesDict:
                 self.globals['update']['check'] = bool(valuesDict["updateCheck"])
             else:
@@ -255,6 +267,12 @@ class Plugin(indigo.PluginBase):
 
         if userCancelled == True:
             return
+
+        # Set Host IP Address override
+        if bool(valuesDict.get('overrideHostIpAddress', False)): 
+            self.globals['overriddenHostIpAddress'] = valuesDict.get('overriddenHostIpAddress', '')
+            if self.globals['overriddenHostIpAddress'] != '':
+                self.generalLogger.info(u"Host IP Address overridden and specified as: '%s'" % (valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
 
         if self.globals['update']['check']:
             if self.globals['update']['checkFrequency'] == 'WEEKLY':
@@ -988,3 +1006,10 @@ class Plugin(indigo.PluginBase):
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             self.generalLogger.error(u"_buildAvailableEffectsList: StandardError detected for '%s' at line '%s' = %s" % (indigo.devices[nanoleafDevId].name, exc_tb.tb_lineno,  e))   
+
+    def refreshEffectList(self, valuesDict, typeId, devId):
+        self.methodTracer.debug(u"CLASS: Plugin")
+        
+        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [devId]])
+
+        self.sleep(3)  # Allow 3 seconds for the list to be refreshed

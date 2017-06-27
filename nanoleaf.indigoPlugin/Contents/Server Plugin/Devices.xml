@@ -12,17 +12,17 @@
             </Field>
 
             <Field id="nanoleafAvailable" type="checkbox" default="true" readonly="true" hidden="true">
-                <Label>Preset Selected ?:</Label>
+                <Label>Nanoleaf Available ?:</Label>
             </Field>
 
             <Field id="help-2A" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true"
                 visibleBindingId="nanoleafAvailable" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-                <Label>Select nanoleaf device to assign to this Indigo device.</Label>
+                <Label>Select Nanoleaf device to assign to this Indigo device.</Label>
             </Field>
 
             <Field id="help-2B" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true"
                 visibleBindingId="nanoleafAvailable" visibleBindingValue="false" alwaysUseInDialogHeightCalc="true">
-                <Label>No nanoleaf devices available to assign to this Indigo device. Have you run discovery and has it completed?</Label>
+                <Label>No Nanoleaf devices available to assign to this Indigo device. Have you run discovery and has it completed?</Label>
             </Field>
 
             <Field id="separator-2" type="separator" alwaysUseInDialogHeightCalc="true"/> 
@@ -34,7 +34,7 @@
                 <Label>IP Address:</Label>
             </Field>
             <Field id="ipAddressHelp" type="label" fontColor="darkgray" fontSize="mini" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-                <Label>^ The IP address of the nanoleaf to be authorised.</Label>
+                <Label>^ The IP address of the Nanoleaf to be authorised.</Label>
             </Field>
 
             <Field id="authorise" type="button" tooltip="Click button to authorise nanoleaf" alwaysUseInDialogHeightCalc="true"> 
@@ -71,13 +71,13 @@
            <!-- nanoleaf Device on/off states -->
            <State id="nanoleafOnState">
                 <ValueType>Boolean</ValueType>
-                <TriggerLabel>nanoleaf On State</TriggerLabel>
-                <ControlPageLabel>nanoleaf On State</ControlPageLabel>
+                <TriggerLabel>Nanoleaf On State</TriggerLabel>
+                <ControlPageLabel>Nanoleaf On State</ControlPageLabel>
             </State>
             <State id="nanoleafOnOffState">
                 <ValueType>String</ValueType>
-                <TriggerLabel>nanoleaf On/Off State</TriggerLabel>
-                <ControlPageLabel>nanoleaf On/Off State</ControlPageLabel>
+                <TriggerLabel>Nanoleaf On/Off State</TriggerLabel>
+                <ControlPageLabel>Nanoleaf On/Off State</ControlPageLabel>
             </State>
 
             <!-- nanoleaf Device values -->

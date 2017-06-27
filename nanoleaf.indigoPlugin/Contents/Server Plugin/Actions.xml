@@ -7,12 +7,19 @@
             <Label>Effect Name:</Label>
             <List class="self" filter="" method="_buildAvailableEffectsList" dynamicReload="true"/>
         </Field>
+        <Field id="separator-1" type="separator" alwaysUseInDialogHeightCalc="true"/> 
+
+        <Field id="refreshEffectList" type="button" tooltip="Click button to refresh effect list" alwaysUseInDialogHeightCalc="true"> 
+            <Label>Refresh Effects:</Label>
+            <Title>Refresh</Title>
+            <CallbackMethod>refreshEffectList</CallbackMethod>
+        </Field>
         </ConfigUI>
         <CallbackMethod>processSetEffect</CallbackMethod>
     </Action>
 
     <Action id="discoverDevices">
-        <Name>Discover nanoleaf Devices</Name>
+        <Name>Discover Nanoleaf Devices</Name>
         <CallbackMethod>processDiscoverDevices</CallbackMethod>
     </Action>
 </Actions>

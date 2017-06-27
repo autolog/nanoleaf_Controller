@@ -6,7 +6,7 @@
 
 # plugin Constants
 
-PLUGIN_TITLE = "Autolog 'nanoleaf V1 Controller'"
+PLUGIN_TITLE = "Autolog 'Nanoleaf V1 Controller'"
 
 # QUEUE Priorities
 QUEUE_PRIORITY_STOP_THREAD   = 0

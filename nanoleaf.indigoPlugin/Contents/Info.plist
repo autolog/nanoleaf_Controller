@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>PluginVersion</key>
-	<string>1.0.4</string>
+	<string>1.0.5</string>
 	<key>ServerApiVersion</key>
 	<string>2.0</string>
 	<key>IwsApiVersion</key>
 	<string>1.0.0</string>
 	<key>CFBundleDisplayName</key>
-	<string>nanoleaf</string>2
+	<string>Nanoleaf</string>2
 	<key>CFBundleName</key>
 	<string>nanoleaf</string>
 	<key>CFBundleIdentifier</key>

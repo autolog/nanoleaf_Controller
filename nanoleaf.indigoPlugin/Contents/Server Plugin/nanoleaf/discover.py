@@ -3,8 +3,8 @@ import socket
 import select
 import time
 
-def discover_auroras(seek_time=30.0):
-    # Returns a dict containing deyails of each Aurora found on the network.
+def discover_auroras(overriddenHostIpAddress, seek_time=30.0):
+    # Returns a dict containing details of each Aurora found on the network.
     # A dict entry contains: nl-deviceid: IP Address
 
     SSDP_IP = "239.255.255.250"
@@ -19,6 +19,7 @@ def discover_auroras(seek_time=30.0):
            'MX: ' + str(SSDP_MX)]
     req = '\r\n'.join(req).encode('utf-8')
 
+    # Start of inline definition
     def check_for_aurora(r):
         if SSDP_ST not in r:
             return
@@ -35,12 +36,22 @@ def discover_auroras(seek_time=30.0):
         if nlDeviceid != '' and ipAddress != '':
             auroras[nlDeviceid] = ipAddress
         return auroras       
+    # End of inline definition
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, SSDP_MX)
-    sock.bind((socket.gethostname(), 9090))
-    sock.sendto(req, (SSDP_IP, SSDP_PORT))
-    sock.setblocking(False)
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, SSDP_MX)
+        if overriddenHostIpAddress != '':
+            sock.bind((overriddenHostIpAddress, 9090))
+        else:
+            sock.bind((socket.gethostname(), 9090))
+        sock.sendto(req, (SSDP_IP, SSDP_PORT))
+        sock.setblocking(False)
+    except socket.error as err:
+        success = False
+        statusMessage = "Socket error while setting up discovery of nanoleaf devices!: %s" % err
+        sock.close()
+        return (success, statusMessage, {})
 
     success = True
     statusMessage = 'OK'
@@ -55,7 +66,7 @@ def discover_auroras(seek_time=30.0):
                 check_for_aurora(response)
         except socket.error as err:
             success = False
-            statusMessage = "Socket error while discovering nanoleaf devices!: " + err
+            statusMessage = "Socket error while discovering nanoleaf devices!: %s" % err
             sock.close()
             break
 

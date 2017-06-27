@@ -80,7 +80,7 @@ class ThreadDiscovery(threading.Thread):
 
                         self.globals['discovery']['discoveredUnmatchedDevices'] = {}                        
                         self.globals['discovery']['discoveredDevices'] = {}                        
-                        rc, statusMessage, self.globals['discovery']['discoveredDevices'] = discover_auroras(self.globals['discovery']['period'])  # discover nanoleaf Auroras on network
+                        rc, statusMessage, self.globals['discovery']['discoveredDevices'] = discover_auroras(self.globals['overriddenHostIpAddress'], self.globals['discovery']['period'])  # discover nanoleaf Auroras on network
                         self.discoveryMonitorLogger.debug(u"nanoleaf Discovery result: %s, %s = %s" % (rc, statusMessage, self.globals['discovery']['discoveredDevices']))
 
                         if rc:  # Return code = True = OK

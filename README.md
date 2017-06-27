@@ -193,25 +193,31 @@ The nanoleaf devices can be controlled using the built-in standard Indigo Device
 * Dim by %
 * Match Brightness
 * Set RGBW Levels
+
 **Note:** Pending a further required Indigo update (to be available post version 7.0.3) to resolve an issue with how the plugin can understand the user input, it is not possible to set the color via an Action.
 
 ### nanoleaf Actions
 
 The Plugin provides two additional actions under *'nanoleaf Actions’*:
+
 * Set Effect
 * Discover nanoleaf Devices
 
 #### Discover nanoleaf Devices (Action)
 
-    Running this action will cause the plugin to try and discover nanoleaf devices on the local network. Once new nanoleaf devices are found, You can use the *NEW...* command from the main UI to add a new device.
+Running this action will cause the plugin to try and discover nanoleaf devices on the local network. Once new nanoleaf devices are found, You can use the * NEW...   command from the main UI to add a new device.
 
 #### Set Effect (Action)
 
-    Use this action to select an availbale effect already defined on the physical nanoleaf device. When you run the action the effect will be run on the nanoleaf device.
+Use this action to select an availbale effect already defined on the physical nanoleaf device. When you run the action the effect will be run on the nanoleaf device. Press the *Refresh* button to refresh the list if you have amended the effects available on the Nanoleaf device and the effect isn't available in the list.
+
+![Action Set Effect](readme_md_images/action_set_effect_refresh.png "Action Set Effect")
+
+Select the effect you require from the list.
 
 ![Action Set Effect](readme_md_images/action_set_effect.png "Action Set Effect")
 
-    Note that communication must have been successfully made to the nanoleaf device for the dynmaic effect list to be built for selection in the action.
+Note that communication must have been successfully made to the nanoleaf device for the dynmaic effect list to be built for selection in the action.
 
 ### States
 
