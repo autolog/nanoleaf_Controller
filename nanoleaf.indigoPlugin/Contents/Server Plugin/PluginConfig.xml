@@ -15,7 +15,7 @@
         <Description>Check to enable Host IP Address input.</Description>
     </Field>
     <Field id="help-1" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-        <Label>^ If you tick this box, then you can specify the host address that the Nanoleaf plugin will use rather than discovering it automatically. Not normally needed but can help in problem situations. It is your responsibility to specify it correctly e.g. '192.168.1.100' (no quotes). Reload the Plugin after saving this change.</Label>
+        <Label>^ Tick this box to override the host address that the Nanoleaf plugin will use rather than discovering it automatically. This is the address of the Apple Mac that the Indigo Server is running on. Not normally needed but can help in problem situations. It is your responsibility to specify it correctly e.g. '192.168.1.100' (no quotes). Reload the Plugin after saving this change.</Label>
     </Field>
     
      <Field type="textfield" id="overriddenHostIpAddress" default="" visibleBindingId="overrideHostIpAddress" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
@@ -123,7 +123,7 @@
         <Label>nanoleaf device Filter IP Address(es):</Label>
     </Field>
     <Field id="help-7" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
-        <Label>Used for debugging only, in order to constrain processing to specific nanoleaf devices.</Label>
+        <Label>Used for debugging only and not used for normal running. It is used to constrain processing to specific nanoleaf devices thereby limiting debug log output.</Label>
     </Field>
 
 

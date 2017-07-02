@@ -85,9 +85,12 @@ class ThreadDiscovery(threading.Thread):
 
                         if rc:  # Return code = True = OK
                             if len(self.globals['discovery']['discoveredDevices']) > 0:
-                                for nlDeviceid, nlIpAddress in self.globals['discovery']['discoveredDevices'].iteritems():
+                                for nlDeviceid, nlInfo in self.globals['discovery']['discoveredDevices'].iteritems():
+                                    nlIpAddress = nlInfo[0]
+                                    nlMacAddress = nlInfo[1] 
                                     nlDeviceid = str(nlDeviceid)
                                     nlIpAddress = str(nlIpAddress)
+                                    nlMacAddress = str(nlMacAddress)
                                     nanoleafDeviceMatchedtoIndigoDevice = False
                                     for devId in self.globals['nl']:
                                         if self.globals['nl'][devId]['nlDeviceid'] != '':
@@ -95,10 +98,16 @@ class ThreadDiscovery(threading.Thread):
                                                 nanoleafDeviceMatchedtoIndigoDevice = True
                                                 break
                                     if not nanoleafDeviceMatchedtoIndigoDevice:
-                                        self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = nlIpAddress
-                                        self.discoveryMonitorLogger.info(u'new nanoleaf device [%s] discovered at address: %s and not yet assigned to Indigo device' % (nlDeviceid, nlIpAddress))
+                                        self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress)
+                                        self.discoveryMonitorLogger.info(u'New nanoleaf device Id [%s] with Mac Address [%s] discovered at address: %s and not yet assigned to an Indigo device' % (nlDeviceid, nlMacAddress, nlIpAddress))
                                     else:
-                                        self.discoveryMonitorLogger.info(u"known nanoleaf device [%s] discovered at address: %s and already assigned to Indigo device '%s'" % (nlDeviceid, nlIpAddress, indigo.devices[devId].name))
+                                        devName = indigo.devices[devId].name
+                                        self.discoveryMonitorLogger.info(u"Known nanoleaf device [%s] with Mac Address [%s] discovered at address: %s and already assigned to an Indigo device '%s'" % (nlDeviceid, nlMacAddress, nlIpAddress, devName))
+                                        devIpAddress = indigo.devices[devId].states['ipAddress']
+                                        if devIpAddress != nlIpAddress:
+                                            self.discoveryDebugLogger.error(u"WARNING: IP Address changed for Nanoleaf '%s', it was '%s' and is now '%s' - Edit Device and Update IP Address." % (devName, devIpAddress, nlIpAddress))
+
+
                             else:
                                 self.discoveryMonitorLogger.error(u"Discovering nanoleaf devices failed to find any nanoleaf devices. Make sure nanoleaf is switched on, has been connected to network and is accessible from nanoleaf App")
                         else:

@@ -21,7 +21,7 @@ class Aurora(object):
         try:
             r = requests.put(url, timeout=5.0, json=data)
         except requests.exceptions.Timeout:
-            return (False, 'Timeout occurred proccesing request', None)
+            return (False, 'Timeout occurred processing request', None)
         except requests.exceptions.RequestException as e:
             errorMsg = e.args[0].reason.message.split('>: ')[1]
             return (False, errorMsg, None)
@@ -32,7 +32,7 @@ class Aurora(object):
         try:
             r = requests.get(url, timeout=5.0)
         except requests.exceptions.Timeout:
-            return (False, 'Timeout occurred proccesing request', None)
+            return (False, 'Timeout occurred processing request', None)
         except requests.exceptions.RequestException as e:
             errorMsg = e.args[0].reason.message.split('>: ')[1]
             return (False, errorMsg, None)
@@ -44,7 +44,7 @@ class Aurora(object):
         try:
             r = requests.delete(url, timeout=5.0)
         except requests.exceptions.Timeout:
-            return (False, 'Timeout occurred proccesing request', None)
+            return (False, 'Timeout occurred processing request', None)
         except requests.exceptions.RequestException as e:
             errorMsg = e.args[0].reason.message.split('>: ')[1]
             return (False, errorMsg, None)

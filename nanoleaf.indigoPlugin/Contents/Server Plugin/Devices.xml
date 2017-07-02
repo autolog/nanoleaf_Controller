@@ -27,14 +27,27 @@
 
             <Field id="separator-2" type="separator" alwaysUseInDialogHeightCalc="true"/> 
 
-            <Field id="address" type="textfield" defaultValue="" readonly="true" alwaysUseInDialogHeightCalc="true">
-                <Label>Address:</Label>
+            <Field id="nanoleafDeviceId" type="textfield" defaultValue="" readonly="true" alwaysUseInDialogHeightCalc="true">
+                <Label>Nanoleaf Device Id:</Label>
+            </Field>
+            <Field id="macAddress" type="textfield" defaultValue="" readonly="true" alwaysUseInDialogHeightCalc="true">
+                <Label>MAC Address:</Label>
             </Field>
              <Field id="ipAddress" type="textfield" defaultValue="" readonly="true" alwaysUseInDialogHeightCalc="true">
                 <Label>IP Address:</Label>
             </Field>
             <Field id="ipAddressHelp" type="label" fontColor="darkgray" fontSize="mini" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
                 <Label>^ The IP address of the Nanoleaf to be authorised.</Label>
+            </Field>
+
+            <Field id="updateIpAddress" type="button" tooltip="Click button to authorise nanoleaf" alwaysUseInDialogHeightCalc="true"> 
+                <Label>Update IP Address:</Label>
+                <Title>Update</Title>
+                <CallbackMethod>updateIpAddress</CallbackMethod>
+            </Field>
+
+            <Field id="updateIpAddressHelp" type="label" fontColor="darkgray" fontSize="mini" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+                <Label>^ Update the IP address if it has changed since the device was set-up.</Label>
             </Field>
 
             <Field id="authorise" type="button" tooltip="Click button to authorise nanoleaf" alwaysUseInDialogHeightCalc="true"> 
@@ -56,7 +69,16 @@
                 <TriggerLabel>Connected</TriggerLabel>
                 <ControlPageLabel>Connected</ControlPageLabel>
             </State>
-
+           <State id="nanoleafDeviceId">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Nanoleaf Device Id</TriggerLabel>
+                <ControlPageLabel>Nanoleaf Device Id</ControlPageLabel>
+            </State>
+           <State id="macAddress">
+                <ValueType>String</ValueType>
+                <TriggerLabel>MAC address</TriggerLabel>
+                <ControlPageLabel>MAC Address</ControlPageLabel>
+            </State>
            <State id="ipAddress">
                 <ValueType>String</ValueType>
                 <TriggerLabel>IP address</TriggerLabel>

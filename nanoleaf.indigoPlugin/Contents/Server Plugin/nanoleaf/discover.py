@@ -1,7 +1,10 @@
+import re
 import requests
 import socket
 import select
+import sys
 import time
+from subprocess import Popen, PIPE
 
 def discover_auroras(overriddenHostIpAddress, seek_time=30.0):
     # Returns a dict containing details of each Aurora found on the network.
@@ -34,27 +37,38 @@ def discover_auroras(overriddenHostIpAddress, seek_time=30.0):
                 nlDeviceid = line.replace("nl-deviceid:", "").strip()
 
         if nlDeviceid != '' and ipAddress != '':
-            auroras[nlDeviceid] = ipAddress
+            try:
+                mac = ''
+                pid = Popen(["/usr/sbin/arp", "-n", ipAddress], stdout=PIPE)
+                s = pid.communicate()[0]
+                mac = re.search(r"(([a-f\d]{1,2}\:){5}[a-f\d]{1,2})", s).groups()[0]
+            except StandardError, e:
+                print(u"StandardError detected in NANOLEAF Send Receive Message Thread. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
+
+            auroras[nlDeviceid] = (ipAddress, mac)
+
         return auroras       
     # End of inline definition
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, SSDP_MX)
+
         if overriddenHostIpAddress != '':
-            sock.bind((overriddenHostIpAddress, 9090))
+            sockBindHost = overriddenHostIpAddress
         else:
-            sock.bind((socket.gethostname(), 9090))
+            sockBindHost = socket.gethostname()
+        sock.bind((sockBindHost, 9090))
         sock.sendto(req, (SSDP_IP, SSDP_PORT))
         sock.setblocking(False)
     except socket.error as err:
         success = False
-        statusMessage = "Socket error while setting up discovery of nanoleaf devices!: %s" % err
+        statusMessage = "Socket error while setting up host '%s' discovery of nanoleaf devices!: %s" % (sockBindHost, err)
         sock.close()
         return (success, statusMessage, {})
 
     success = True
-    statusMessage = 'OK'
+    statusMessage = "Discovery established for host '%s'" % sockBindHost
     auroras = {}
 
     timeout = time.time() + seek_time
@@ -66,7 +80,7 @@ def discover_auroras(overriddenHostIpAddress, seek_time=30.0):
                 check_for_aurora(response)
         except socket.error as err:
             success = False
-            statusMessage = "Socket error while discovering nanoleaf devices!: %s" % err
+            statusMessage = "Socket error while host '%s' discovering nanoleaf devices!: %s" % (sockBindHost, err)
             sock.close()
             break
 

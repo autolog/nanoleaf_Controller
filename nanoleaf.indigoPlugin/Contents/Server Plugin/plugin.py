@@ -87,8 +87,8 @@ class Plugin(indigo.PluginBase):
 
         # Initialise discovery dictionary to store discovered devices, discovery period
         self.globals['discovery'] = {}
-        self.globals['discovery']['discoveredDevices'] = {}  # dict of nanoleaf device ids (psuedo mac) and IP Addresses
-        self.globals['discovery']['discoveredUnmatchedDevices'] = {}  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and IP Addresses
+        self.globals['discovery']['discoveredDevices'] = {}  # dict of nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
+        self.globals['discovery']['discoveredUnmatchedDevices'] = {}  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
         self.globals['discovery']['period'] = 30  # period of each active discovery
         self.globals['discovery']['count'] = 0  # count of number of discoveries performed
 
@@ -106,7 +106,7 @@ class Plugin(indigo.PluginBase):
         self.globals['polling']['seconds'] = float(300.0)  # 5 minutes
         self.globals['polling']['forceThreadEnd'] = False
         self.globals['polling']['quiesced'] = False
-        self.globals['polling']['missedLimit'] = int(2)  # i.e. 10 minutes in 'seconds' = 300 (5 mins)
+        self.globals['polling']['missedPollLimit'] = int(2)  # Default to 2 missed polls
         self.globals['polling']['count'] = int(0)
         self.globals['polling']['trigger'] = int(0)
 
@@ -240,7 +240,7 @@ class Plugin(indigo.PluginBase):
                     errorDict["showAlertText"] = "The number of missed polls limit must be specified as an integer e.g 2, 5 etc."
                     return (False, valuesDict, errorDict)
             else:
-                self.globals['polling']['missedPollLimit'] = int(360)  # Default to 6 minutes
+                self.globals['polling']['missedPollLimit'] = int(2)  # Default to 2 missed polls
 
             if "defaultDiscoveryPeriod" in valuesDict:
                 try:
@@ -528,6 +528,8 @@ class Plugin(indigo.PluginBase):
                 props["SupportsWhiteTemperature"] = True
                 propsRequiresUpdate = True
 
+            # FOR FUTURE INDIGO VERSION (> 7.0.3)
+
             # if not "WhiteTemperatureMin" in props:
             #     props["WhiteTemperatureMin"] = 1200
             #     propsRequiresUpdate = True
@@ -556,6 +558,7 @@ class Plugin(indigo.PluginBase):
             self.globals['nl'][dev.id]['authToken']               = str(dev.pluginProps.get('authToken', ''))
             self.globals['nl'][dev.id]['nanoleafObject']          = None
             self.globals['nl'][dev.id]['ipAddress']               = str(dev.pluginProps.get('ipAddress', ''))
+            self.globals['nl'][dev.id]['macAddress']              = str(dev.pluginProps.get('macAddress', ''))
             self.globals['nl'][dev.id]['lastResponseToPollCount'] = 0 
             self.globals['nl'][dev.id]['effectsList']             = []
             dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status i.e. communication still to be established
@@ -567,7 +570,6 @@ class Plugin(indigo.PluginBase):
 
             self.globals['nl'][dev.id]['onState']     = False      # True or False
             self.globals['nl'][dev.id]['onOffState']  = 'off'      # 'on' or 'off'
-            #self.globals['nl'][dev.id]['turnOnIfOff'] = bool(dev.pluginProps.get('turnOnIfOff', True))
 
             if self.globals['nl'][dev.id]['authToken'] == '':
                 self.generalLogger.error(u"Unable to start '%s' as device not authorised. Edit Device settings and follow instructions on how to authorise device." % (dev.name))
@@ -595,19 +597,17 @@ class Plugin(indigo.PluginBase):
     def deviceDeleted(self, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        nlDeviceid = ''
-        nlIpAddress = ''
-
         if dev.deviceTypeId == "nanoleafDevice": 
             self.deviceStopComm(dev)
             if dev.id in self.globals['nl']:
                 nlDeviceid = self.globals['nl'][dev.id]['nlDeviceid']
                 nlIpAddress = self.globals['nl'][dev.id]['ipAddress']
+                nlMacAddress = self.globals['nl'][dev.id]['macAddress']
                 del self.globals['nl'][dev.id]  # Delete internal storage for device
 
-        if nlDeviceid != '' and nlIpAddress != '':
-            # Make device available for adding as a new device
-            self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = nlIpAddress            
+                if nlDeviceid != '':
+                    # Make device available for adding as a new device
+                    self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress)            
 
     def getDeviceConfigUiValues(self, pluginProps, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
@@ -622,6 +622,8 @@ class Plugin(indigo.PluginBase):
 
             valuesDict['nanoleafAvailable'] = 'true'
             valuesDict['nanoleafDevice'] = 'SELECT_AVAILABLE'
+            valuesDict['nanoleafDeviceId'] = nanoleafDev.pluginProps.get('address', '')
+            valuesDict['macAddress'] = nanoleafDev.pluginProps.get('macAddress', '')
             valuesDict['ipAddress'] = nanoleafDev.pluginProps.get('ipAddress', '')
             valuesDict['authToken'] = nanoleafDev.pluginProps.get('authToken', '')
             
@@ -636,22 +638,20 @@ class Plugin(indigo.PluginBase):
 
         self.currentTime = indigo.server.getTime()
 
-
-
-
         nanoleafDev = indigo.devices[devId]
 
         keyValueList = [
+            {'key': 'nanoleafDeviceId', 'value': valuesDict['nanoleafDeviceId']},
+            {'key': 'macAddress', 'value': valuesDict['macAddress']},
             {'key': 'ipAddress', 'value': valuesDict['ipAddress']},
             {'key': 'authToken', 'value': valuesDict['authToken']}
         ]
         nanoleafDev.updateStatesOnServer(keyValueList)
      
-        props = nanoleafDev.pluginProps
-        props["address"]   = valuesDict['address']
-        props["ipAddress"] = valuesDict['ipAddress']
-        props["authToken"] = valuesDict['authToken']
-        nanoleafDev.replacePluginPropsOnServer(props)
+        valuesDict["address"] = valuesDict['nanoleafDeviceId']
+
+        if valuesDict['nanoleafDeviceId'] in self.globals['discovery']['discoveredUnmatchedDevices']:
+            del self.globals['discovery']['discoveredUnmatchedDevices'][valuesDict['nanoleafDeviceId']]
 
         return (True, valuesDict)
 
@@ -923,7 +923,7 @@ class Plugin(indigo.PluginBase):
     def authoriseNanoleaf(self, valuesDict, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"actionConfigPresetUpdateButtonPressed: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
+        self.generalLogger.debug(u"deviceConfigAuthoriseButtonPressed: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
 
         ipAddress = valuesDict['ipAddress']
 
@@ -943,14 +943,36 @@ class Plugin(indigo.PluginBase):
         return valuesDict
 
 
+
+    def updateIpAddress(self, valuesDict, typeId, devId):
+        self.methodTracer.threaddebug(u"CLASS: Plugin")
+
+        self.generalLogger.debug(u"actionConfigPresetUpdateButtonPressed: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
+
+
+        if 'address' in valuesDict and valuesDict['address'] != '':
+            nlInfo = self.globals['discovery']['discoveredDevices'][valuesDict['address']]
+            valuesDict['ipAddress'] = nlInfo[0]  # from tuple of (IP Address, MAC Address)
+            return valuesDict
+        else:
+            errorDict = indigo.Dict()
+            errorDict["updateIpAddress"] = "Unable to update IP Address!"
+            errorDict["showAlertText"] = "Unable to update IP Address as nanoleaf Device ID not set"
+            return (valuesDict, errorDict)
+
+        return valuesDict
+
+
+
     def nanoleafAvailableDeviceSelected(self, valuesDict, typeId, devId):
 
         try:
             self.generalLogger.debug(u"nanoleafAvailableDeviceSelected: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
 
             if valuesDict['nanoleafDevice'] != 'SELECT_AVAILABLE':
-                address, ipAddress = valuesDict['nanoleafDevice'].split('-')
-                valuesDict['address'] = address
+                nlDeviceid, nlMacAddress, ipAddress = valuesDict['nanoleafDevice'].split('-')
+                valuesDict['nanoleafDeviceId'] = nlDeviceid
+                valuesDict['macAddress'] = nlMacAddress
                 valuesDict['ipAddress'] = ipAddress
 
             return valuesDict
@@ -967,8 +989,10 @@ class Plugin(indigo.PluginBase):
             available_dict = []
             available_dict.append(("SELECT_AVAILABLE", "- Select nanoleaf device -"))
 
-            for nlDeviceid, nlIpAddress in self.globals['discovery']['discoveredUnmatchedDevices'].iteritems():  # self.globals['discovery']['discoveredDevices']
-                nanoleaf_available = (str('%s-%s' % (nlDeviceid, nlIpAddress)), str(nlIpAddress))
+            for nlDeviceid, nlInfo in self.globals['discovery']['discoveredUnmatchedDevices'].iteritems():  # self.globals['discovery']['discoveredDevices']
+                nlIpAddress = nlInfo[0]
+                nlMacAddress = nlInfo[1]
+                nanoleaf_available = (str('%s-%s-%s' % (nlDeviceid, nlMacAddress, nlIpAddress)), str(nlIpAddress))
                 available_dict.append(nanoleaf_available)
             if len(available_dict) == 1:
                 available_dict = []
