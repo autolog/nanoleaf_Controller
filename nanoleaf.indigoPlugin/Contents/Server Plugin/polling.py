@@ -73,20 +73,23 @@ class ThreadPolling(threading.Thread):
                     # Check if nanoleaf devices are responding to polls
                     allResponding = True  # Assume all nanoleafs are responding 
                     for devId in self.globals['nl']:
-                        if ((len(self.globals['debug']['debugFilteredIpAddresses']) == 0) 
-                            or ((len(self.globals['debug']['debugFilteredIpAddresses']) > 0) 
-                                and ('ipAddress' in self.globals['nl'][devId]) 
-                                and (self.globals['nl'][devId]['ipAddress'] in self.globals['debug']['debugFilteredIpAddresses']))):
-                            dev_poll_check = self.globals['nl'][devId]['lastResponseToPollCount'] + self.globals['polling']['missedPollLimit']
-                            self.pollingLogger.debug(u"Dev = '%s', Count = %s, nanoleaf LastResponse = %s, Missed Limit = %s, Check = %s" % (indigo.devices[devId].name, self.globals['polling']['count'], self.globals['nl'][devId]['lastResponseToPollCount'], self.globals['polling']['missedPollLimit'], dev_poll_check))
-                            dev = indigo.devices[devId]
-                            if (dev_poll_check < self.globals['polling']['count']) or (not self.globals['nl'][devId]['started']):
-                                self.pollingLogger.debug(u"dev_poll_check < self.globals['polling']['count']")
-                                indigo.devices[devId].setErrorStateOnServer(u"no ack")
-                                dev.updateStateOnServer(key='connected', value='false', clearErrorState=False)
-                                allResponding = False  # At least one nanoleaf is not responding
+                        if indigo.devices[devId].enabled:
+                            if ((len(self.globals['debug']['debugFilteredIpAddresses']) == 0) 
+                                or ((len(self.globals['debug']['debugFilteredIpAddresses']) > 0) 
+                                    and ('ipAddress' in self.globals['nl'][devId]) 
+                                    and (self.globals['nl'][devId]['ipAddress'] in self.globals['debug']['debugFilteredIpAddresses']))):
+                                dev_poll_check = self.globals['nl'][devId]['lastResponseToPollCount'] + self.globals['polling']['missedPollLimit']
+                                self.pollingLogger.debug(u"Dev = '%s', Count = %s, nanoleaf LastResponse = %s, Missed Limit = %s, Check = %s" % (indigo.devices[devId].name, self.globals['polling']['count'], self.globals['nl'][devId]['lastResponseToPollCount'], self.globals['polling']['missedPollLimit'], dev_poll_check))
+                                dev = indigo.devices[devId]
+                                if (dev_poll_check < self.globals['polling']['count']) or (not self.globals['nl'][devId]['started']):
+                                    self.pollingLogger.debug(u"dev_poll_check < self.globals['polling']['count']")
+                                    indigo.devices[devId].setErrorStateOnServer(u"no ack")
+                                    dev.updateStateOnServer(key='connected', value='false', clearErrorState=False)
+                                    allResponding = False  # At least one nanoleaf is not responding
+                                elif not dev.states['connected']:  # Previously detected as not responding
+                                    allResponding = False  # At least one nanoleaf is not responding
                     if not allResponding:
-                        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])  # Run Discovery to search for device (in case details have cahnged)
+                        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])  # Run Discovery to search for device (in case details have changed)
 
                     self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_POLLING, 'STATUSPOLLING', 0])  # Poll nanoleaf devices for status updates
 

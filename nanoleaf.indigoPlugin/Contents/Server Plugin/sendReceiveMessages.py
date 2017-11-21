@@ -258,8 +258,6 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                         continue
 
-
-
                 except Queue.Empty:
                     pass
                 # except StandardError, e:

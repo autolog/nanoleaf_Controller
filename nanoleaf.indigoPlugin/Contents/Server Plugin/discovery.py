@@ -101,11 +101,14 @@ class ThreadDiscovery(threading.Thread):
                                         self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress)
                                         self.discoveryMonitorLogger.info(u'New nanoleaf device Id [%s] with Mac Address [%s] discovered at address: %s and not yet assigned to an Indigo device' % (nlDeviceid, nlMacAddress, nlIpAddress))
                                     else:
-                                        devName = indigo.devices[devId].name
+                                        dev = indigo.devices[devId]
+                                        devName = dev.name
                                         self.discoveryMonitorLogger.info(u"Known nanoleaf device [%s] with Mac Address [%s] discovered at address: %s and already assigned to an Indigo device '%s'" % (nlDeviceid, nlMacAddress, nlIpAddress, devName))
                                         devIpAddress = indigo.devices[devId].states['ipAddress']
                                         if devIpAddress != nlIpAddress:
                                             self.discoveryDebugLogger.error(u"WARNING: IP Address changed for Nanoleaf '%s', it was '%s' and is now '%s' - Edit Device and Update IP Address." % (devName, devIpAddress, nlIpAddress))
+                                            dev.updateStateOnServer(key='connected', value=False)
+                                            dev.setErrorStateOnServer(u"ip mismatch")
 
 
                             else:

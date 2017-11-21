@@ -528,21 +528,19 @@ class Plugin(indigo.PluginBase):
                 props["SupportsWhiteTemperature"] = True
                 propsRequiresUpdate = True
 
-            # FOR FUTURE INDIGO VERSION (> 7.0.3)
+            if "WhiteTemperatureMin" not in props:
+                props["WhiteTemperatureMin"] = 1200
+                propsRequiresUpdate = True
+            elif props["WhiteTemperatureMin"] != 1200: 
+                props["WhiteTemperatureMin"] = 1200
+                propsRequiresUpdate = True
 
-            # if not "WhiteTemperatureMin" in props:
-            #     props["WhiteTemperatureMin"] = 1200
-            #     propsRequiresUpdate = True
-            # elif props["WhiteTemperatureMin"] != 1200: 
-            #     props["WhiteTemperatureMin"] = 1200
-            #     propsRequiresUpdate = True
-
-            # if not "WhiteTemperatureMax" in props:
-            #     props["WhiteTemperatureMax"] = 6500
-            #     propsRequiresUpdate = True
-            # elif props["WhiteTemperatureMax"] != 6500: 
-            #     props["WhiteTemperatureMax"] = 6500
-            #     propsRequiresUpdate = True
+            if "WhiteTemperatureMax" not in props:
+                props["WhiteTemperatureMax"] = 6500
+                propsRequiresUpdate = True
+            elif props["WhiteTemperatureMax"] != 6500: 
+                props["WhiteTemperatureMax"] = 6500
+                propsRequiresUpdate = True
 
             if propsRequiresUpdate:
                 dev.replacePluginPropsOnServer(props)
