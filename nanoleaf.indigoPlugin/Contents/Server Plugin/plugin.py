@@ -21,7 +21,6 @@ import time
 #from time import localtime, time, sleep, strftime
 
 from constants import *
-from ghpu import GitHubPluginUpdater
 from nanoleaf.aurora import *
 from nanoleaf.discover import *
 from polling import ThreadPolling
@@ -114,9 +113,6 @@ class Plugin(indigo.PluginBase):
         self.globals['constant'] = {}
         self.globals['constant']['defaultDatetime'] = datetime.strptime("2000-01-01","%Y-%m-%d")
 
-        # Initialise dictionary for update checking
-        self.globals['update'] = {}
-
         self.validatePrefsConfigUi(pluginPrefs)  # Validate the Plugin Config before plugin initialisation
         
         self.closedPrefsConfigUi(pluginPrefs, False)  # Set Plugin config options (as if the dialogue had been closed)
@@ -127,25 +123,8 @@ class Plugin(indigo.PluginBase):
 
         indigo.PluginBase.__del__(self)
 
-    def updatePlugin(self):
-        self.globals['update']['updater'].update()
-
-    def checkForUpdates(self):
-        self.globals['update']['updater'].checkForUpdate()
-
-    def forceUpdate(self):
-        self.globals['update']['updater'].update(currentVersion='0.0.0')
-
-    def checkRateLimit(self):
-        limiter = self.globals['update']['updater'].getRateLimit()
-        self.generalLogger.info('RateLimit {limit:%d remaining:%d resetAt:%d}' % limiter)
-
     def startup(self):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
-
-        # Set-up update checker
-        self.globals['update']['updater'] = GitHubPluginUpdater(self)
-        self.globals['update']['nextCheckTime'] = time.time()
 
         indigo.devices.subscribeToChanges()
 
@@ -211,15 +190,6 @@ class Plugin(indigo.PluginBase):
                         errorDict["showAlertText"] = "You have elected to override the Host Ip Address but haven't specified it!"
                         return (False, valuesDict, errorDict)
 
-            if "updateCheck" in valuesDict:
-                self.globals['update']['check'] = bool(valuesDict["updateCheck"])
-            else:
-                self.globals['update']['check'] = False
-
-            # No need to validate this as value can only be selected from a pull down list?
-            if "checkFrequency" in valuesDict:
-                self.globals['update']['checkFrequency'] = valuesDict.get("checkFrequency", 'DAILY')
-
             if "statusPolling" in valuesDict:
                 self.globals['polling']['status'] = bool(valuesDict["statusPolling"])
             else:
@@ -273,14 +243,6 @@ class Plugin(indigo.PluginBase):
             self.globals['overriddenHostIpAddress'] = valuesDict.get('overriddenHostIpAddress', '')
             if self.globals['overriddenHostIpAddress'] != '':
                 self.generalLogger.info(u"Host IP Address overridden and specified as: '%s'" % (valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
-
-        if self.globals['update']['check']:
-            if self.globals['update']['checkFrequency'] == 'WEEKLY':
-                self.globals['update']['checkTimeIncrement'] = (7 * 24 * 60 * 60)  # In seconds
-            else:
-                # DAILY 
-                self.globals['update']['checkTimeIncrement'] = (24 * 60 * 60)  # In seconds
-
 
         # Check monitoring / debug / filered IP address options  
         self.setDebuggingLevels(valuesDict)
@@ -430,16 +392,6 @@ class Plugin(indigo.PluginBase):
                 self.sleep(10)  # Allow startup to complete
 
             while True:
-                if self.globals['update']['check']:
-                    if time.time() > self.globals['update']['nextCheckTime']:
-                        if not 'checkTimeIncrement' in self.globals['update']:
-                            self.globals['update']['checkTimeIncrement'] = (24 * 60 * 60)  # One Day In seconds
-                        self.globals['update']['nextCheckTime'] = time.time() + self.globals['update']['checkTimeIncrement']
-                        self.generalLogger.info(u"%s checking for Plugin update" % PLUGIN_TITLE)
-                        self.globals['update']['updater'].checkForUpdate()
-
-                        nextCheckTime = time.strftime('%A, %Y-%b-%d at %H:%M', time.localtime(self.globals['update']['nextCheckTime']))
-                        self.generalLogger.info(u"%s next update check scheduled for: %s" % (PLUGIN_TITLE, nextCheckTime))
                 self.sleep(300) # 5 minutes in seconds
 
         except self.StopThread:
@@ -907,7 +859,7 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         if dev.states['connected'] == False or self.globals['nl'][dev.id]['started'] == False:
-            self.generalLogger.info(u"Unable to process  \"%s\" for \"%s\" as device not connected" % (action.deviceAction, dev.name))
+            self.generalLogger.info(u"Unable to process  \"%s\" for \"%s\" as device not connected" % (pluginAction.description, dev.name))
             return
 
         effect = pluginAction.props.get('effectList')
