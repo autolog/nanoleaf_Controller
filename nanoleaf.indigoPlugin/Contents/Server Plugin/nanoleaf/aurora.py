@@ -145,11 +145,11 @@ class Aurora(object):
     #     self.on = not self.on
 
     def set_off(self):
-        data = {"on": False}
+        data = {"on": { "value" : False}}
         return self.__put("state", data)
 
     def set_on(self):
-        data = {"on": True}
+        data = {"on": { "value" : True}}
         return self.__put("state", data)
 
     def toggle_on(self):
