@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017
+# nanoleaf Controller - Main © Autolog 2017-2020
 #
 
 import colorsys
@@ -10,23 +10,17 @@ try:
     import indigo
 except:
     pass
-import locale
 import logging
-import os
+
 import Queue
-import re
-import sys
 import threading
-import time
-#from time import localtime, time, sleep, strftime
 
 from constants import *
-from nanoleaf.aurora import *
-from nanoleaf.discover import *
+from nanoleaf.nanoleaf import *
+from nanoleaf.discover_nanoleaf import *
 from polling import ThreadPolling
 from sendReceiveMessages import ThreadSendReceiveMessages
 from discovery import ThreadDiscovery
-
 
 
 class Plugin(indigo.PluginBase):
@@ -73,7 +67,7 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
 
         # Now logging is set-up, output Initialising Message
-        self.generalLogger.info(u"%s initializing . . ." % PLUGIN_TITLE)
+        self.generalLogger.info(u'{} initializing . . .'.format(PLUGIN_TITLE))
 
         
         
@@ -131,14 +125,14 @@ class Plugin(indigo.PluginBase):
         # nanoleaf device internal storage initialisation
 
         for dev in indigo.devices.iter("self"):
-            self.generalLogger.debug(u'nanoleaf Indigo Device: %s [%s = %s]' % (dev.name, dev.states['ipAddress'], dev.address))
+            self.generalLogger.debug(u'nanoleaf Indigo Device: {} [{} = {}]'.format(dev.name, dev.states['ipAddress'], dev.address))
             self.globals['nl'][dev.id] = {}
             self.globals['nl'][dev.id]['started']                 = False
             self.globals['nl'][dev.id]['initialisedFromdevice']   = False
             self.globals['nl'][dev.id]['nlDeviceid']              = dev.address  # eg. 'd0:73:d5:0a:bc:de' (psuedo mac address)
             self.globals['nl'][dev.id]['authToken']               = ''
             self.globals['nl'][dev.id]['nanoleafObject']          = None
-            self.globals['nl'][dev.id]['ipAddress']               = str(dev.pluginProps.get('ipAddress', ''))
+            self.globals['nl'][dev.id]['ipAddress']               = '{}'.format(dev.pluginProps.get('ipAddress', ''))
             self.globals['nl'][dev.id]['lastResponseToPollCount'] = 0
             self.globals['nl'][dev.id]['effectsList']             = []
             dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status i.e. communication still to be established
@@ -165,7 +159,7 @@ class Plugin(indigo.PluginBase):
  
         self.globals['startupCompleted'] = True  # Enable runConcurrentThread to commence processing
 
-        self.generalLogger.info(u"%s initialization complete" % PLUGIN_TITLE)
+        self.generalLogger.info(u'{} initialization complete'.format(PLUGIN_TITLE))
         
     def shutdown(self):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
@@ -174,7 +168,7 @@ class Plugin(indigo.PluginBase):
             self.globals['polling']['forceThreadEnd'] = True
             self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
 
-        self.generalLogger.info(u"%s  Plugin shutdown complete" % PLUGIN_TITLE)
+        self.generalLogger.info(u'{} Plugin shutdown complete'.format(PLUGIN_TITLE))
 
 
     def validatePrefsConfigUi(self, valuesDict):
@@ -226,14 +220,14 @@ class Plugin(indigo.PluginBase):
             return True
 
         except StandardError, e:
-            self.generalLogger.error(u"validatePrefsConfigUi error detected. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
+            self.generalLogger.error(u'validatePrefsConfigUi error detected. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
             return True
 
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"'closePrefsConfigUi' called with userCancelled = %s" % (str(userCancelled)))  
+        self.generalLogger.debug(u'\'closePrefsConfigUi\' called with userCancelled = {}'.format(userCancelled))
 
         if userCancelled == True:
             return
@@ -242,7 +236,7 @@ class Plugin(indigo.PluginBase):
         if bool(valuesDict.get('overrideHostIpAddress', False)): 
             self.globals['overriddenHostIpAddress'] = valuesDict.get('overriddenHostIpAddress', '')
             if self.globals['overriddenHostIpAddress'] != '':
-                self.generalLogger.info(u"Host IP Address overridden and specified as: '%s'" % (valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
+                self.generalLogger.info(u'Host IP Address overridden and specified as: \'{}\''.format(valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
 
         # Check monitoring / debug / filered IP address options  
         self.setDebuggingLevels(valuesDict)
@@ -292,9 +286,9 @@ class Plugin(indigo.PluginBase):
                     self.globals['debug']['debugFilteredIpAddressesUI'] += ', ' + ipAddress
                     
             if len(self.globals['debug']['debugFilteredIpAddresses']) == 1:    
-                self.generalLogger.warning(u"Filtering on nanoleaf Device with IP Address: %s" % (self.globals['debug']['debugFilteredIpAddressesUI']))
+                self.generalLogger.warning(u'Filtering on nanoleaf Device with IP Address: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))
             else:  
-                self.generalLogger.warning(u"Filtering on nanoleaf Devices with IP Addresses: %s" % (self.globals['debug']['debugFilteredIpAddressesUI']))  
+                self.generalLogger.warning(u'Filtering on nanoleaf Devices with IP Addresses: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))  
 
         self.globals['debug']['monitorDebugEnabled'] = bool(valuesDict.get("monitorDebugEnabled", False))
 
@@ -351,7 +345,7 @@ class Plugin(indigo.PluginBase):
                 if monitorDiscovery:
                     monitorTypes.append('Discovery')
                 message = self.listActive(monitorTypes)   
-                self.generalLogger.warning(u"Monitoring enabled for nanoleaf device: %s" % (message))  
+                self.generalLogger.warning(u'Monitoring enabled for nanoleaf device: {}'.format(message))  
 
             if not self.globals['debug']['debugActive']:
                 self.generalLogger.info(u"No debugging requested")
@@ -368,7 +362,7 @@ class Plugin(indigo.PluginBase):
                 if debugPolling:
                     debugTypes.append('Polling')
                 message = self.listActive(debugTypes)   
-                self.generalLogger.warning(u"Debugging enabled for nanoleaf device: %s" % (message))  
+                self.generalLogger.warning(u'Debugging enabled for nanoleaf device: {}'.format(message))  
 
     def listActive(self, monitorDebugTypes):            
         self.methodTracer.threaddebug(u"CLASS: Plugin")
@@ -395,7 +389,7 @@ class Plugin(indigo.PluginBase):
                 self.sleep(300) # 5 minutes in seconds
 
         except self.StopThread:
-            self.generalLogger.info(u"%s Plugin shutdown requested" % PLUGIN_TITLE)
+            self.generalLogger.info(u'{} Plugin shutdown requested'.format(PLUGIN_TITLE))
 
             self.generalLogger.debug(u"runConcurrentThread being ended . . .") 
 
@@ -427,10 +421,10 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         try:
-            self.generalLogger.info(u"Starting  '%s' . . . " % (dev.name))
+            self.generalLogger.info(u'Starting  \'{}\' . . .'.format(dev.name))
 
             if dev.deviceTypeId != "nanoleafDevice":
-                self.generalLogger.error(u"Failed to start device [%s]: Device type [%s] not known by plugin." % (dev.name, dev.deviceTypeId))
+                self.generalLogger.error(u'Failed to start device [{}]: Device type [{}] not known by plugin.'.format(dev.name, dev.deviceTypeId))
                 return
 
             dev.stateListOrDisplayStateIdChanged()  # Ensure latest devices.xml is being used
@@ -515,28 +509,28 @@ class Plugin(indigo.PluginBase):
 
             # Check if ip address debug filter(s) active
             if (len(self.globals['debug']['debugFilteredIpAddresses']) > 0) and (dev.states['ipAddress'] not in self.globals['debug']['debugFilteredIpAddresses']):
-                self.generalLogger.info(u"Start NOT performed for  '%s' as nanoleaf device with ip address '%s' not included in start filter" % (dev.name, dev.states['ipAddress']))
+                self.generalLogger.info(u'Start NOT performed for \'{}\' as nanoleaf device with ip address \'{}\' not included in start filter'.format(dev.name, dev.states['ipAddress']))
                 return
 
             self.globals['nl'][dev.id]['onState']     = False      # True or False
             self.globals['nl'][dev.id]['onOffState']  = 'off'      # 'on' or 'off'
 
             if self.globals['nl'][dev.id]['authToken'] == '':
-                self.generalLogger.error(u"Unable to start '%s' as device not authorised. Edit Device settings and follow instructions on how to authorise device." % (dev.name))
+                self.generalLogger.error(u'Unable to start \'{}\' as device not authorised. Edit Device settings and follow instructions on how to authorise device.'.format(dev.name))
             else:
                 self.globals['nl'][dev.id]["started"] = True
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [dev.id]])
-                self.generalLogger.info(u". . . Started '%s' " % (dev.name))
+                self.generalLogger.info(u'. . . Started \'{}\''.format(dev.name))
 
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u"deviceStartComm: StandardError detected for '%s' at line '%s' = %s" % (dev.name, exc_tb.tb_lineno,  e))   
+            self.generalLogger.error(u'deviceStartComm: StandardError detected for \'{}\' at line \'{}\' = {}'.format(dev.name, exc_tb.tb_lineno,  e))   
 
 
     def deviceStopComm(self, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.info(u"Stopping '%s'" % (dev.name))
+        self.generalLogger.info(u'Stopping \'{}\''.format(dev.name))
 
         dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status
 
@@ -563,7 +557,7 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         try:
-            self.generalLogger.debug(u"getDeviceConfigUiValues: typeId [%s], actionId [%s], pluginProps[%s]" % (typeId, devId, pluginProps))
+            self.generalLogger.debug(u'getDeviceConfigUiValues: typeId [{}], actionId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
 
             nanoleafDev = indigo.devices[devId]
 
@@ -581,14 +575,15 @@ class Plugin(indigo.PluginBase):
 
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u"getDeviceConfigUiValues: StandardError detected for '%s' at line '%s' = %s" % (dev.name, exc_tb.tb_lineno,  e))   
+            self.generalLogger.error(u'getDeviceConfigUiValues: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[devId].name, exc_tb.tb_lineno,  e))
 
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.currentTime = indigo.server.getTime()
-
         nanoleafDev = indigo.devices[devId]
+
+        if valuesDict['nanoleafDeviceId'] in self.globals['discovery']['discoveredUnmatchedDevices']:
+            del self.globals['discovery']['discoveredUnmatchedDevices'][valuesDict['nanoleafDeviceId']]
 
         keyValueList = [
             {'key': 'nanoleafDeviceId', 'value': valuesDict['nanoleafDeviceId']},
@@ -608,7 +603,7 @@ class Plugin(indigo.PluginBase):
     def getActionConfigUiValues(self, pluginProps, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"getActionConfigUiValues: typeId [%s], devId [%s], pluginProps[%s]" % (typeId, devId, pluginProps))
+        self.generalLogger.debug(u'getActionConfigUiValues: typeId [{}], devId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
 
         errorDict = indigo.Dict()
         valuesDict = pluginProps
@@ -627,7 +622,7 @@ class Plugin(indigo.PluginBase):
         if typeId == "setEffect":
             validateResult = self.validateActionConfigUiSetEffect(valuesDict, typeId, actionId)
         else:
-            self.generalLogger.debug(u"validateActionConfigUi [UNKNOWN]: typeId=[%s], actionId=[%s]" % (typeId, actionId))
+            self.generalLogger.debug(u'validateActionConfigUi [UNKNOWN]: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
             return (True, valuesDict)
 
         if validateResult[0] == True:
@@ -639,7 +634,7 @@ class Plugin(indigo.PluginBase):
     def validateActionConfigUiSetEffect(self, valuesDict, typeId, actionId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"validateActionConfigUiSpecific: typeId=[%s], actionId=[%s]" % (typeId, actionId))
+        self.generalLogger.debug(u'validateActionConfigUiSpecific: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
 
         if valuesDict['effectList'] == 'SELECT_EFFECT':
             errorDict = indigo.Dict()
@@ -663,7 +658,7 @@ class Plugin(indigo.PluginBase):
         valuesDict = indigo.Dict()
         errorMsgDict = indigo.Dict() 
 
-        self.generalLogger.debug(u"QWERTY QWERTY = %s" % (menuId))
+        self.generalLogger.debug(u'getMenuActionConfigUiValues: menuId = {}'.format(menuId))
 
         # if menuId == "yourMenuItemId":
         #  valuesDict["someFieldId"] = someDefaultValue
@@ -682,13 +677,13 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [dev.id]])
-        self.generalLogger.info(u"sent \"%s\" %s" % (dev.name, "status request"))
+        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, "status request"))
 
 
     def actionControlDevice(self, action, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
         if dev.states['connected'] == False or self.globals['nl'][dev.id]['started'] == False:
-            self.generalLogger.info(u"Unable to process  \"%s\" for \"%s\" as device not connected" % (action.deviceAction, dev.name))
+            self.generalLogger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(action.deviceAction, dev.name))
             return
 
         ###### TURN ON ######
@@ -719,10 +714,10 @@ class Plugin(indigo.PluginBase):
                 if newBrightness > 100:
                     newBrightness = 100
                     brightenBy = 100 - dev.brightness
-                self.generalLogger.info(u"Brightening %s by %s to %s" % (dev.name, brightenBy, newBrightness))
+                self.generalLogger.info(u'Brightening {} by {} to {}'.format(dev.name, brightenBy, newBrightness))
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'BRIGHTEN', [dev.id, brightenBy]])
             else:
-                self.generalLogger.info(u"Ignoring Brighten request for %s as device is at full brightness" % (dev.name))
+                self.generalLogger.info(u'Ignoring Brighten request for {}} as device is at full brightness'.format(dev.name))
 
         ###### DIM BY ######
         elif action.deviceAction ==indigo.kDeviceAction.DimBy:
@@ -732,38 +727,38 @@ class Plugin(indigo.PluginBase):
                 if newBrightness < 0:
                     newBrightness = 0
                     dimBy = dev.brightness
-                self.generalLogger.info(u"Dimming %s by %s to %s" % (dev.name, dimBy, newBrightness))
+                self.generalLogger.info(u'Dimming {} by {} to {}'.format(dev.name, dimBy, newBrightness))
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'DIM', [dev.id, dimBy]])
             else:
-                self.generalLogger.info(u"Ignoring Dim request for %s as device is Off" % (dev.name))
+                self.generalLogger.info(u'Ignoring Dim request for {} as device is Off'.format(dev.name))
 
         ###### SET COLOR LEVELS ######
         elif action.deviceAction ==indigo.kDeviceAction.SetColorLevels:
-            self.generalLogger.debug(u"SET COLOR LEVELS = \"%s\" %s" % (dev.name, action))
+            self.generalLogger.debug(u'SET COLOR LEVELS = \'{}\' {}'.format(dev.name, action))
             self._processSetColorLevels(action, dev)
 
     def _processTurnOn(self, pluginAction, dev, actionUi='on'):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"nanoleaf 'processTurnOn' [%s]" % (self.globals['nl'][dev.id]['ipAddress'])) 
+        self.generalLogger.debug(u'nanoleaf \'processTurnOn\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
 
         self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'ON', [dev.id]])
 
-        self.generalLogger.info(u"sent \"%s\" %s" % (dev.name, actionUi))
+        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
 
     def _processTurnOff(self, pluginAction, dev, actionUi='off'):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"nanoleaf 'processTurnOff' [%s]" % (self.globals['nl'][dev.id]['ipAddress'])) 
+        self.generalLogger.debug(u'nanoleaf \'processTurnOff\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
 
         self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'OFF', [dev.id]])
 
-        self.generalLogger.info(u"sent \"%s\" %s" % (dev.name, actionUi))
+        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
 
     def _processTurnOnOffToggle(self, pluginAction, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"nanoleaf 'processTurnOnOffToggle' [%s]" % (self.globals['nl'][dev.id]['ipAddress'])) 
+        self.generalLogger.debug(u'nanoleaf \'processTurnOnOffToggle\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
 
         onStateRequested = not dev.onState
         if onStateRequested == True:
@@ -782,17 +777,17 @@ class Plugin(indigo.PluginBase):
             else:
                 actionUi = 'dim'  
             self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'BRIGHTNESS', [dev.id, newBrightness]])
-            self.generalLogger.info(u"sent \"%s\" %s to %s" % (dev.name, actionUi, newBrightness))
+            self.generalLogger.info(u'sent \'{}\' {} to {}'.format(dev.name, actionUi, newBrightness))
         else:
             self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'OFF', [dev.id]])
-            self.generalLogger.info(u"sent \"%s\" %s" % (dev.name, 'dim to off'))
+            self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, 'dim to off'))
 
 
     def _processSetColorLevels(self, action, dev):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         try:
-            self.generalLogger.debug(u'processSetColorLevels ACTION:\n%s ' % action)
+            self.generalLogger.debug(u'processSetColorLevels ACTION:\n{}'.format(action))
 
             # Determine Color / White Mode
             colorMode = False
@@ -819,7 +814,7 @@ class Plugin(indigo.PluginBase):
 
                 self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'WHITE', [dev.id, whiteLevel, whiteTemperature]])
 
-                self.generalLogger.info(u"sent \"%s\" set White Level to \"%s\" and White Temperature to \"%s\"" % (dev.name, int(whiteLevel), whiteTemperature))
+                self.generalLogger.info(u'sent \'{}\' set White Level to \'{}\' and White Temperature to \'{}\''.format(dev.name, int(whiteLevel), whiteTemperature))
 
             else:
                 # As neither of 'whiteTemperature' or 'whiteTemperature' are set - assume mode is Colour
@@ -837,17 +832,17 @@ class Plugin(indigo.PluginBase):
                     if 'blueLevel' in action.actionValue:
                         blueLevel = float(action.actionValue['blueLevel'])
 
-                    self.generalLogger.debug(u"Color: \"%s\" R, G, B: %s, %s, %s" % (dev.name, redLevel, greenLevel, blueLevel))
+                    self.generalLogger.debug(u'Color: \'{}\' R, G, B: {}, {}, {}'.format(dev.name, redLevel, greenLevel, blueLevel))
 
                     self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'COLOR', [dev.id, redLevel, greenLevel, blueLevel]])
 
-                    self.generalLogger.info(u"sent \"%s\" set Color Level to red \"%s\", green \"%s\" and blue \"%s\"" % (dev.name, int(round(redLevel)), int(round(greenLevel)), int(round(blueLevel))))
+                    self.generalLogger.info(u'sent \'{}\' set Color Level to red \'{}\', green \'{}\' and blue \'{}\''.format(dev.name, int(round(redLevel)), int(round(greenLevel)), int(round(blueLevel))))
                 else:
-                    self.generalLogger.info(u"Failed to send \"%s\" set Color Level as device does not support color." % (dev.name))
+                    self.generalLogger.info(u'Failed to send \'{}\' set Color Level as device does not support color.'.format(dev.name))
 
 
         except StandardError, e:
-            self.generalLogger.error(u"StandardError detected during processSetColorLevels. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))
+            self.generalLogger.error(u'StandardError detected during processSetColorLevels. Line \'{}\' has error = \'{}\''.format(sys.exc_traceback.tb_lineno, e))
 
 
     def processDiscoverDevices(self, pluginAction):
@@ -859,35 +854,45 @@ class Plugin(indigo.PluginBase):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         if dev.states['connected'] == False or self.globals['nl'][dev.id]['started'] == False:
-            self.generalLogger.info(u"Unable to process  \"%s\" for \"%s\" as device not connected" % (pluginAction.description, dev.name))
+            self.generalLogger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(pluginAction.description, dev.name))
             return
 
         effect = pluginAction.props.get('effectList')
 
         if effect in self.globals['nl'][dev.id]['effectsList']:
-            self.generalLogger.info(u"sent \"%s\" Set Effect to %s" % (dev.name, effect))
+            self.generalLogger.info(u'sent \'{}\' Set Effect to {}'.format(dev.name, effect))
             self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'SETEFFECT', [dev.id, effect]])
         else:
-            self.generalLogger.info("Effect '%s' not available on nanoleaf device '%s'" % (effect, dev.name)) 
+            self.generalLogger.info('Effect \'{}\' not available on nanoleaf device \'{}\''.format(effect, dev.name)) 
 
     def authoriseNanoleaf(self, valuesDict, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"deviceConfigAuthoriseButtonPressed: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
+        self.generalLogger.debug(u'deviceConfigAuthoriseButtonPressed: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
 
         ipAddress = valuesDict['ipAddress']
+
+        try:
+            socket.inet_aton(ipAddress)
+            # legal
+        except socket.error:
+            # Not legal
+            errorDict = indigo.Dict()
+            errorDict["nanoleafDevice"] = "IP Address is invalid"
+            errorDict["showAlertText"] = "IP Address is invalid! Select Nanoleaf device before attempting to authorise."
+            return (valuesDict, errorDict)
 
         rc, statusMessage, authToken = generate_auth_token(ipAddress)
 
         if rc:
             valuesDict['authToken'] = authToken
-            self.generalLogger.debug(u"generate_auth_token: rc[%s], statusMessage[%s], authToken = %s" % (rc, statusMessage, authToken))
+            self.generalLogger.debug(u'generate_auth_token: rc[{}], statusMessage[{}], authToken = {}'.format(rc, statusMessage, authToken))
         else:
-            self.generalLogger.error(u"%s" % statusMessage)
+            self.generalLogger.error(u'{}'.format(statusMessage))
 
             errorDict = indigo.Dict()
-            errorDict["authorise"] = "Access Forbidden to nanoleaf device!"
-            errorDict["showAlertText"] = "Access Forbidden to nanoleaf device! Press and hold the power button for 5-7 seconds first! (Light will begin flashing)"
+            errorDict["authorise"] = 'Access Forbidden to nanoleaf device!'
+            errorDict["showAlertText"] = 'Access Forbidden to nanoleaf device! Press and hold the power button for 5-7 seconds first! (Light will begin flashing)'
             return (valuesDict, errorDict)
 
         return valuesDict
@@ -897,7 +902,7 @@ class Plugin(indigo.PluginBase):
     def updateIpAddress(self, valuesDict, typeId, devId):
         self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"actionConfigPresetUpdateButtonPressed: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
+        self.generalLogger.debug(u'actionConfigPresetUpdateButtonPressed: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
 
 
         if 'address' in valuesDict and valuesDict['address'] != '':
@@ -912,15 +917,13 @@ class Plugin(indigo.PluginBase):
 
         return valuesDict
 
-
-
     def nanoleafAvailableDeviceSelected(self, valuesDict, typeId, devId):
 
         try:
-            self.generalLogger.debug(u"nanoleafAvailableDeviceSelected: typeId[%s], devId[%s], valuesDict = %s" % (typeId, devId, valuesDict))
+            self.generalLogger.debug(u'nanoleafAvailableDeviceSelected: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
 
             if valuesDict['nanoleafDevice'] != 'SELECT_AVAILABLE':
-                nlDeviceid, nlMacAddress, ipAddress = valuesDict['nanoleafDevice'].split('-')
+                nlDeviceid, nlMacAddress, ipAddress, nlName = valuesDict['nanoleafDevice'].split('*')
                 valuesDict['nanoleafDeviceId'] = nlDeviceid
                 valuesDict['macAddress'] = nlMacAddress
                 valuesDict['ipAddress'] = ipAddress
@@ -929,11 +932,12 @@ class Plugin(indigo.PluginBase):
 
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u"nanoleafAvailableDeviceSelected: StandardError detected for '%s' at line '%s' = %s" % (dev.name, exc_tb.tb_lineno,  e))   
-
+            self.generalLogger.error(u'nanoleafAvailableDeviceSelected: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[devId].name, exc_tb.tb_lineno,  e))   
 
     def _buildAvailableDevicesList(self, filter="", valuesDict=None, typeId="", targetId=0):
         self.methodTracer.debug(u"CLASS: Plugin")
+
+        self.generalLogger.debug(u'_buildAvailableDevicesList: TARGET ID = \'{}\''.format(targetId))
 
         try:
             available_dict = []
@@ -942,7 +946,8 @@ class Plugin(indigo.PluginBase):
             for nlDeviceid, nlInfo in self.globals['discovery']['discoveredUnmatchedDevices'].iteritems():  # self.globals['discovery']['discoveredDevices']
                 nlIpAddress = nlInfo[0]
                 nlMacAddress = nlInfo[1]
-                nanoleaf_available = (str('%s-%s-%s' % (nlDeviceid, nlMacAddress, nlIpAddress)), str(nlIpAddress))
+                nlName = nlInfo[2]
+                nanoleaf_available = ('{}*{}*{}*{}'.format(nlDeviceid, nlMacAddress, nlIpAddress, nlName), '{}: {}'.format(nlName, nlMacAddress))
                 available_dict.append(nanoleaf_available)
             if len(available_dict) == 1:
                 available_dict = []
@@ -953,14 +958,12 @@ class Plugin(indigo.PluginBase):
 
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u"_buildAvailableDevicesList: StandardError detected for '%s' at line '%s' = %s" % (dev.name, exc_tb.tb_lineno,  e))   
-
-
+            self.generalLogger.error(u'_buildAvailableDevicesList: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[targetId].name, exc_tb.tb_lineno,  e))   
 
     def _buildAvailableEffectsList(self, filter="", valuesDict=None, typeId="", targetId=0):
         self.methodTracer.debug(u"CLASS: Plugin")
 
-        self.generalLogger.debug("_buildAvailableEffectsList: TARGET ID = %s" % targetId)
+        self.generalLogger.debug('_buildAvailableEffectsList: TARGET ID = {}'.format(targetId))
         try:
             nanoleafDevId = targetId
 
@@ -979,7 +982,7 @@ class Plugin(indigo.PluginBase):
 
         except StandardError, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u"_buildAvailableEffectsList: StandardError detected for '%s' at line '%s' = %s" % (indigo.devices[nanoleafDevId].name, exc_tb.tb_lineno,  e))   
+            self.generalLogger.error(u'_buildAvailableEffectsList: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[targetId].name, exc_tb.tb_lineno,  e))   
 
     def refreshEffectList(self, valuesDict, typeId, devId):
         self.methodTracer.debug(u"CLASS: Plugin")

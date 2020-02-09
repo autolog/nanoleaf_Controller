@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017
+# nanoleaf Controller - Main © Autolog 2017-2020
 #
 
 import colorsys
@@ -20,8 +20,8 @@ from time import time, sleep
 import traceback
 
 from constants import *
-from nanoleaf.aurora import *
-from nanoleaf.discover import *
+from nanoleaf.nanoleaf import *
+from nanoleaf.discover_nanoleaf import *
 
 class ThreadDiscovery(threading.Thread):
 
@@ -55,7 +55,7 @@ class ThreadDiscovery(threading.Thread):
                 try:
                     nanoleafQueuedPriorityCommandData = self.globals['queues']['discovery'].get(True,5)
 
-                    self.discoveryDebugLogger.debug(u"NANOLEAF QUEUED PRIORITY COMMAND DATA: %s" % nanoleafQueuedPriorityCommandData)    
+                    self.discoveryDebugLogger.debug(u'NANOLEAF QUEUED PRIORITY COMMAND DATA: {}'.format(nanoleafQueuedPriorityCommandData))    
                     nanoleafQueuePriority, nanoleafCommand, nanoleafCommandParameters = nanoleafQueuedPriorityCommandData
 
                     # Check if monitoring / debug options have changed and if so set accordingly
@@ -69,66 +69,82 @@ class ThreadDiscovery(threading.Thread):
                         self.globals['debug']['previousDebugMethodTrace'] = self.globals['debug']['debugMethodTrace']
                         self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
 
-                    self.discoveryDebugLogger.debug(u"Dequeued Discovery Message to process [NANOLEAFCOMMAND]: %s" % (nanoleafCommand))
+                    self.discoveryDebugLogger.debug(u'Dequeued Discovery Message to process [NANOLEAFCOMMAND]: {}'.format(nanoleafCommand))
 
                     if nanoleafCommand == 'STOPTHREAD':
                         break  # Exit While loop and quit thread
 
 
                     if nanoleafCommand == 'DISCOVERY':
-                        self.discoveryMonitorLogger.info(u"Discovering nanoleaf devices on network - this should take ~%s seconds . . ." % self.globals['discovery']['period'])
+                        self.discoveryMonitorLogger.info(u'Discovering nanoleaf aurora and canvas devices on network - this should take ~{} seconds . . .'.format(self.globals['discovery']['period']))
 
-                        self.globals['discovery']['discoveredUnmatchedDevices'] = {}                        
-                        self.globals['discovery']['discoveredDevices'] = {}                        
-                        rc, statusMessage, self.globals['discovery']['discoveredDevices'] = discover_auroras(self.globals['overriddenHostIpAddress'], self.globals['discovery']['period'])  # discover nanoleaf Auroras on network
-                        self.discoveryMonitorLogger.debug(u"nanoleaf Discovery result: %s, %s = %s" % (rc, statusMessage, self.globals['discovery']['discoveredDevices']))
+                        self.globals['discovery']['discoveredUnmatchedDevices'] = {}
+                        self.globals['discovery']['discoveredAuroras'] = {}                        
+                        self.globals['discovery']['discoveredCanvases'] = {}                        
+                        self.globals['discovery']['discoveredDevices'] = {}
 
-                        if rc:  # Return code = True = OK
-                            if len(self.globals['discovery']['discoveredDevices']) > 0:
-                                for nlDeviceid, nlInfo in self.globals['discovery']['discoveredDevices'].iteritems():
-                                    nlIpAddress = nlInfo[0]
-                                    nlMacAddress = nlInfo[1] 
-                                    nlDeviceid = str(nlDeviceid)
-                                    nlIpAddress = str(nlIpAddress)
-                                    nlMacAddress = str(nlMacAddress)
-                                    nanoleafDeviceMatchedtoIndigoDevice = False
-                                    for devId in self.globals['nl']:
-                                        if self.globals['nl'][devId]['nlDeviceid'] != '':
-                                            if nlDeviceid == self.globals['nl'][devId]['nlDeviceid']:
-                                                nanoleafDeviceMatchedtoIndigoDevice = True
-                                                break
-                                    if not nanoleafDeviceMatchedtoIndigoDevice:
-                                        self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress)
-                                        self.discoveryMonitorLogger.info(u'New nanoleaf device Id [%s] with Mac Address [%s] discovered at address: %s and not yet assigned to an Indigo device' % (nlDeviceid, nlMacAddress, nlIpAddress))
-                                    else:
-                                        dev = indigo.devices[devId]
-                                        devName = dev.name
-                                        self.discoveryMonitorLogger.info(u"Known nanoleaf device [%s] with Mac Address [%s] discovered at address: %s and already assigned to an Indigo device '%s'" % (nlDeviceid, nlMacAddress, nlIpAddress, devName))
-                                        devIpAddress = indigo.devices[devId].states['ipAddress']
-                                        if devIpAddress != nlIpAddress:
-                                            self.discoveryDebugLogger.error(u"WARNING: IP Address changed for Nanoleaf '%s', it was '%s' and is now '%s' - Edit Device and Update IP Address." % (devName, devIpAddress, nlIpAddress))
-                                            dev.updateStateOnServer(key='connected', value=False)
-                                            dev.setErrorStateOnServer(u"ip mismatch")
+                        rc_aurora, statusMessage, self.globals['discovery']['discoveredAuroras'] = discover_nanoleafs(self.globals['overriddenHostIpAddress'], self.globals['discovery']['period'], 'aurora')  # discover nanoleaf Auroras on network
+                        self.discoveryMonitorLogger.debug(u'nanoleaf aurora Discovery result: {}, {} = {}'.format(rc_aurora, statusMessage, self.globals['discovery']['discoveredAuroras']))
+                        if not rc_aurora:  # Return code = False = NOT OK
+                            self.discoveryMonitorLogger.error(u'Discovering nanoleaf aurora devices failed: {}'.format(statusMessage))
+                            continue
 
+                        rc_canvas, statusMessage, self.globals['discovery']['discoveredCanvases'] = discover_nanoleafs(self.globals['overriddenHostIpAddress'], self.globals['discovery']['period'], 'canvas')  # discover nanoleaf Canvases on network
+                        self.discoveryMonitorLogger.debug(u'nanoleaf canvas Discovery result: {}, {} = {}'.format(rc_canvas, statusMessage, self.globals['discovery']['discoveredCanvases']))
+                        if not rc_canvas:  # Return code = False = NOT OK
+                            self.discoveryMonitorLogger.error(u'Discovering nanoleaf canvas devices failed: {}'.format(statusMessage))
+                            continue
 
-                            else:
-                                self.discoveryMonitorLogger.error(u"Discovering nanoleaf devices failed to find any nanoleaf devices. Make sure nanoleaf is switched on, has been connected to network and is accessible from nanoleaf App")
+                        self.globals['discovery']['discoveredDevices'] = self.globals['discovery']['discoveredAuroras']
+                        self.globals['discovery']['discoveredDevices'].update(self.globals['discovery']['discoveredCanvases'])
+
+                        self.discoveryMonitorLogger.debug(u'nanoleaf Discovered Devices: {}'.format(self.globals['discovery']['discoveredDevices']))
+                        self.discoveryMonitorLogger.debug(u'NANOLEAF DISCOVERY: {}'.format(self.globals['discovery']['discoveredDevices']))
+
+                        if len(self.globals['discovery']['discoveredDevices']) > 0:
+                            for nlDeviceid, nlInfo in self.globals['discovery']['discoveredDevices'].iteritems():
+                                nlDeviceid = '{}'.format(nlDeviceid)
+                                nlIpAddress = '{}'.format(nlInfo[0])
+                                nlMacAddress = '{}'.format(nlInfo[1])
+
+                                if nlMacAddress[1:2] == u':':
+                                    nlMacAddress = '0{}'.format(nlMacAddress)
+                                nlDeviceName = '{}'.format(nlInfo[2])
+                                if 'aurora' in nlDeviceName.lower():
+                                    nlDeviceName = 'Aurora'
+                                elif 'canvas' in nlDeviceName.lower():
+                                    nlDeviceName = 'Canvas'
+                                nanoleafDeviceMatchedtoIndigoDevice = False
+                                for devId in self.globals['nl']:
+                                    if self.globals['nl'][devId]['nlDeviceid'] != '':
+                                        if nlDeviceid == self.globals['nl'][devId]['nlDeviceid']:
+                                            nanoleafDeviceMatchedtoIndigoDevice = True
+                                            break
+                                if not nanoleafDeviceMatchedtoIndigoDevice:
+                                    self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress, nlDeviceName)
+                                    self.discoveryMonitorLogger.info(u'New nanoleaf {} with device Id \'{}\' and Mac Address \'{}\' discovered at IP Address: {} and not yet assigned to an Indigo device'.format(nlDeviceName, nlDeviceid, nlMacAddress, nlIpAddress))
+                                else:
+                                    dev = indigo.devices[devId]
+                                    devName = dev.name
+                                    self.discoveryMonitorLogger.info(u'Known nanoleaf {} with device Id \'{}\' and Mac Address \'{}\' discovered at address: {} and already assigned to Indigo device \'{}\''.format(nlDeviceName, nlDeviceid, nlMacAddress, nlIpAddress, devName))
+                                    devIpAddress = indigo.devices[devId].states['ipAddress']
+                                    if devIpAddress != nlIpAddress:
+                                        self.discoveryDebugLogger.error(u'WARNING: IP Address changed for Nanoleaf \'{}\', it was \'{}\' and is now \'{}\' - Edit Device and Update IP Address.'.format(devName, devIpAddress, nlIpAddress))
+                                        dev.updateStateOnServer(key='connected', value=False)
+                                        dev.setErrorStateOnServer(u"ip mismatch")
                         else:
-                            self.discoveryMonitorLogger.error(u"Discovering nanoleaf devices failed: %s" % statusMessage)
-
+                            self.discoveryMonitorLogger.error(u"Discovering nanoleaf aurora / canvas devices failed to find any. Make sure nanoleaf device is switched on, has been connected to network and is accessible from nanoleaf App")
                         continue
 
                 except Queue.Empty:
                     pass
-                # except StandardError, e:
-                #     self.discoveryDebugLogger.error(u"StandardError detected communicating with nanoleaf device. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
                 except StandardError, e:
                     self.discoveryDebugLogger.error(u"StandardError detected communicating with NANOLEAF lamp:") 
                     errorLines = traceback.format_exc().splitlines()
                     for errorLine in errorLines:
-                        self.discoveryDebugLogger.error(u"%s" % errorLine)   
+                        self.discoveryDebugLogger.error(u'{}'.format(errorLine))   
 
         except StandardError, e:
-            self.discoveryDebugLogger.error(u"StandardError detected in NANOLEAF Send Receive Message Thread. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))   
+            self.discoveryDebugLogger.error(u'StandardError detected in NANOLEAF Send Receive Message Thread. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
 
-        self.discoveryDebugLogger.debug(u"NANOLEAF Send Receive Message Thread ended.")   
+        self.discoveryDebugLogger.debug(u'NANOLEAF Send Receive Message Thread ended.')   

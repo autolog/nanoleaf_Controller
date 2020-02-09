@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <Actions>
-    <Action id="setEffect" deviceFilter="self.nanoleafDevice">
+    <Action id="setEffect" deviceFilter="self.nanoleafDevice" uiPath="DeviceActions">
         <Name>Set Effect</Name>
         <ConfigUI>
             <Field id="effectList" type="menu" defaultValue="SELECT_EFFECT" alwaysUseInDialogHeightCalc="true">

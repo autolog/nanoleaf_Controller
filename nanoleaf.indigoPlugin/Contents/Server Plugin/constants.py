@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017
+# nanoleaf Controller - Main © Autolog 2017-2020
 #
 
 # plugin Constants

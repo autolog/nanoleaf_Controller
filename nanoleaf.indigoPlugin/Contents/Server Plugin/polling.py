@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017
+# nanoleaf Controller - Main © Autolog 2017-2020
 #
 
 try:
@@ -32,8 +32,8 @@ class ThreadPolling(threading.Thread):
         self.methodTracer = logging.getLogger("Plugin.method")  
         self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
 
-        self.pollingLogger.info(u"Initialising to poll at %i second intervals" % (self.globals['polling']['seconds']))  
-        self.pollingLogger.debug(u"debugPolling = %s [%s], debugMethodTrace = %s [%s]" % (self.globals['debug']['debugPolling'], 
+        self.pollingLogger.info(u'Initialising to poll at {} second intervals'.format(int(self.globals['polling']['seconds'])))  
+        self.pollingLogger.debug('debugPolling = {} [{}], debugMethodTrace = {} [{}]'.format(self.globals['debug']['debugPolling'], 
             type(self.globals['debug']['debugPolling']), 
             self.globals['debug']['debugMethodTrace'], 
             type(self.globals['debug']['debugMethodTrace'])))  
@@ -56,7 +56,7 @@ class ThreadPolling(threading.Thread):
 
                 # Check if polling seconds interval has changed and if so set accordingly
                 if self.globals['polling']['seconds'] != self.previousPollingSeconds:
-                    self.pollingLogger.info(u"Changing to poll at %i second intervals (was %i seconds)" % (self.globals['polling']['seconds'], self.previousPollingSeconds))  
+                    self.pollingLogger.info(u'Changing to poll at {} second intervals (was {} seconds)'.format(int(self.globals['polling']['seconds']), int(self.previousPollingSeconds)))
                     self.previousPollingSeconds = self.globals['polling']['seconds']
 
                 self.pollingLogger.debug(u"Start of While Loop ...")
@@ -65,7 +65,7 @@ class ThreadPolling(threading.Thread):
                         break
                     else:
                         self.pollStop.clear()
-                self.pollingLogger.debug(u"Polling at %i second intervals" % (self.globals['polling']['seconds']))
+                self.pollingLogger.debug(u'Polling at {} second intervals'.format(self.globals['polling']['seconds']))
                 if self.globals['polling']['quiesced'] == False:
 
                     self.globals['polling']['count'] += 1  # Increment polling count
@@ -79,7 +79,7 @@ class ThreadPolling(threading.Thread):
                                     and ('ipAddress' in self.globals['nl'][devId]) 
                                     and (self.globals['nl'][devId]['ipAddress'] in self.globals['debug']['debugFilteredIpAddresses']))):
                                 dev_poll_check = self.globals['nl'][devId]['lastResponseToPollCount'] + self.globals['polling']['missedPollLimit']
-                                self.pollingLogger.debug(u"Dev = '%s', Count = %s, nanoleaf LastResponse = %s, Missed Limit = %s, Check = %s" % (indigo.devices[devId].name, self.globals['polling']['count'], self.globals['nl'][devId]['lastResponseToPollCount'], self.globals['polling']['missedPollLimit'], dev_poll_check))
+                                self.pollingLogger.debug(u'Dev = \'{}\', Count = {}, nanoleaf LastResponse = {}, Missed Limit = {}, Check = {}'.format(indigo.devices[devId].name, int(self.globals['polling']['count']), int(self.globals['nl'][devId]['lastResponseToPollCount']), int(self.globals['polling']['missedPollLimit']), int(dev_poll_check)))
                                 dev = indigo.devices[devId]
                                 if (dev_poll_check < self.globals['polling']['count']) or (not self.globals['nl'][devId]['started']):
                                     self.pollingLogger.debug(u"dev_poll_check < self.globals['polling']['count']")
@@ -93,9 +93,9 @@ class ThreadPolling(threading.Thread):
 
                     self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_POLLING, 'STATUSPOLLING', 0])  # Poll nanoleaf devices for status updates
 
-            self.pollingLogger.debug(u"Polling thread ending")
+            self.pollingLogger.debug(u'Polling thread ending')
 
         except StandardError, e:
-            self.pollingLogger.error(u"StandardError detected during Polling. Line '%s' has error='%s'" % (sys.exc_traceback.tb_lineno, e))
+            self.pollingLogger.error(u'StandardError detected during Polling. Line \'{}\' has error = \'{}\''.format(sys.exc_traceback.tb_lineno, e))
 
         self.globals['polling']['threadActive'] = False

@@ -1,1 +1,1 @@
-from .aurora import Aurora
+from .nanoleaf import Nanoleaf

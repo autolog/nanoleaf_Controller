@@ -2,19 +2,19 @@ import requests
 import random
 import colorsys
 
-# Primary interface for an Aurora light
+# Primary interface for Nanoleaf models: Aurora NL22 and Canvas NL29
 # For instructions or bug reports, please visit
 # https://github.com/software-2/nanoleaf
 
 
-class Aurora(object):
+class Nanoleaf(object):
     def __init__(self, ip_address, auth_token):
         self.baseUrl = "http://" + ip_address + ":16021/api/v1/" + auth_token + "/"
         self.ip_address = ip_address
         self.auth_token = auth_token
 
     def __repr__(self):
-        return "<Aurora(" + self.ip_address + ")>"
+        return "<Nanoleaf(" + self.ip_address + ")>"
 
     def __put(self, endpoint, data):
         url = self.baseUrl + endpoint
@@ -78,7 +78,7 @@ class Aurora(object):
 
     @property
     def info(self):
-        """Returns the full Aurora Info request. 
+        """Returns the full nanoleaf device Info request. 
         
         Useful for debugging since it's just a fat dump."""
         return self.__get()
