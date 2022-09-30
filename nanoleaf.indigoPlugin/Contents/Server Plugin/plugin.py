@@ -1,23 +1,24 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017-2020
+# nanoleaf Controller © Autolog 2017-2022
 #
 
-import colorsys
-from datetime import datetime
 try:
     import indigo
 except:
     pass
 import logging
+import platform
 
-import Queue
+import queue
+import sys
 import threading
+import traceback
 
 from constants import *
-from nanoleaf.nanoleaf import *
-from nanoleaf.discover_nanoleaf import *
+from nanoleafapi.nanoleaf import *
+from nanoleafapi.discover_nanoleaf import *
 from polling import ThreadPolling
 from sendReceiveMessages import ThreadSendReceiveMessages
 from discovery import ThreadDiscovery
@@ -25,157 +26,178 @@ from discovery import ThreadDiscovery
 
 class Plugin(indigo.PluginBase):
 
-    def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
-        indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
+    def __init__(self, plugin_id, plugin_display_name, plugin_version, plugin_prefs):
+        indigo.PluginBase.__init__(self, plugin_id, plugin_display_name, plugin_version, plugin_prefs)
 
         # Initialise dictionary to store plugin Globals
-        self.globals = {}
+        self.globals = dict()
 
-        self.globals['overriddenHostIpAddress'] = ''  # If needed, set in Plugin config
+        # Initialise Indigo plugin info
+        self.globals[PLUGIN_INFO] = dict()
+        self.globals[PLUGIN_INFO][PLUGIN_ID] = plugin_id
+        self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME] = plugin_display_name
+        self.globals[PLUGIN_INFO][PLUGIN_VERSION] = plugin_version
+        self.globals[PLUGIN_INFO][PATH] = indigo.server.getInstallFolderPath()
+        self.globals[PLUGIN_INFO][API_VERSION] = indigo.server.apiVersion
+        self.globals[PLUGIN_INFO][INDIGO_SERVER_ADDRESS] = indigo.server.address
+
+        self.globals[OVERRIDDEN_HOST_IP_ADDRESS] = ''  # If needed, set in Plugin config
 
         # Used to prevent runConcurrentThread from running until startup is complete
-        self.globals['startupCompleted'] = False
+        self.globals[STARTUP_COMPLETED] = False
 
-        # Initialise dictionary for debug in plugin Globals
-        self.globals['debug'] = {}
-        self.globals['debug']['monitorDebugEnabled']        = False  # if False it indicates no debugging is active else it indicates that at least one type of debug is active
-        self.globals['debug']['debugFilteredIpAddresses']   = []  # Set to nanoleaf IP Address(es) to limit processing for debug purposes
-        self.globals['debug']['debugFilteredIpAddressesUI'] = ''  # Set to nanoleaf IP Address(es) to limit processing for debug purposes (UI version)
-        self.globals['debug']['debugGeneral']               = logging.INFO  # For general debugging of the main thread
-        self.globals['debug']['monitorSendReceive']         = logging.INFO  # For monitoring messages sent to nanoleaf devices
-        self.globals['debug']['debugSendReceive']           = logging.INFO  # For debugging messages sent to nanoleaf devices
-        self.globals['debug']['monitorDiscovery']           = logging.INFO  # For monitoring discovery of nanoleaf devices
-        self.globals['debug']['debugDiscovery']             = logging.INFO  # For debugging discovery of nanoleaf devices
-        self.globals['debug']['debugMethodTrace']           = logging.INFO  # For displaying method invocations i.e. trace method
-        self.globals['debug']['debugPolling']               = logging.INFO  # For polling debugging
-        self.globals['debug']['previousDebugGeneral']       = logging.INFO  # For general debugging of the main thread
-        self.globals['debug']['previousMonitorSendReceive'] = logging.INFO  # For monitoring messages sent to nanoleaf devices 
-        self.globals['debug']['previousDebugSendReceive']   = logging.INFO  # For debugging messages sent to nanoleaf devices
-        self.globals['debug']['previousMonitorDiscovery']   = logging.INFO  # For monitoring discovery of nanoleaf devices 
-        self.globals['debug']['previousDebugDiscovery']     = logging.INFO  # For debugging  discovery of  nanoleaf devices
-        self.globals['debug']['previousDebugMethodTrace']   = logging.INFO  # For displaying method invocations i.e. trace method
-        self.globals['debug']['previousDebugPolling']       = logging.INFO  # For polling debugging
+        log_format = logging.Formatter("%(asctime)s.%(msecs)03d\t%(levelname)-12s\t%(name)s.%(funcName)-25s %(msg)s", datefmt="%Y-%m-%d %H:%M:%S")
+        self.plugin_file_handler.setFormatter(log_format)
+        self.plugin_file_handler.setLevel(LOG_LEVEL_INFO)  # Logging Level for plugin log file
+        self.indigo_log_handler.setLevel(LOG_LEVEL_INFO)   # Logging level for Indigo Event Log
 
-        # Setup Logging
-        logformat = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)-12s\t%(name)s.%(funcName)-25s %(msg)s', datefmt='%Y-%m-%d %H:%M:%S')
-        self.plugin_file_handler.setFormatter(logformat)
-        self.plugin_file_handler.setLevel(logging.INFO)  # Master Logging Level for Plugin Log file
-        self.indigo_log_handler.setLevel(logging.INFO)   # Logging level for Indigo Event Log
-        self.generalLogger = logging.getLogger("Plugin.general")
-        self.generalLogger.setLevel(self.globals['debug']['debugGeneral'])
-        self.methodTracer = logging.getLogger("Plugin.method")  
-        self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
+        self.logger = logging.getLogger("Plugin.Hubitat")
 
-        # Now logging is set-up, output Initialising Message
-        self.generalLogger.info(u'{} initializing . . .'.format(PLUGIN_TITLE))
+        # Now logging is set-up, output Initialising message
 
-        
-        
+        # startup_message_ui = "\n"  # Start with a line break
+        # startup_message_ui += f"{' Initialising Nanoleaf Controller Plugin ':={'^'}130}\n"
+        # startup_message_ui += f"{'Plugin Name:':<31} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}\n"
+        # startup_message_ui += f"{'Plugin Version:':<31} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}\n"
+        # startup_message_ui += f"{'Plugin ID:':<31} {self.globals[PLUGIN_INFO][PLUGIN_ID]}\n"
+        # startup_message_ui += f"{'Indigo Version:':<31} {indigo.server.version}\n"
+        # startup_message_ui += f"{'Indigo License:':<31} {indigo.server.licenseStatus}\n"
+        # startup_message_ui += f"{'Indigo API Version:':<31} {indigo.server.apiVersion}\n"
+        # machine = platform.machine()
+        # startup_message_ui += f"{'Architecture:':<31} {machine}\n"
+        # sys_version = sys.version.replace("\n", "")
+        # startup_message_ui += f"{'Python Version:':<31} {sys_version}\n"
+        # startup_message_ui += f"{'Mac OS Version:':<31} {platform.mac_ver()[0]}\n"
+        # startup_message_ui += f"{'':={'^'}130}\n"
+        # self.logger.info(startup_message_ui)
+
         # Initialise dictionary to store internal details about nanoleaf devices
-        self.globals['nl'] = {} 
+        self.globals[NL]= dict()
 
-        self.globals['threads'] = {}
-        self.globals['threads']['sendReceiveMessages'] = {}
-        self.globals['threads']['polling'] = {}
+        self.globals[THREADS]= dict()
+        self.globals[THREADS][SEND_RECEIVE_MESSAGES]= dict()
+        self.globals[THREADS][POLLING]= dict()
 
         # Initialise discovery dictionary to store discovered devices, discovery period
-        self.globals['discovery'] = {}
-        self.globals['discovery']['discoveredDevices'] = {}  # dict of nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
-        self.globals['discovery']['discoveredUnmatchedDevices'] = {}  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
-        self.globals['discovery']['period'] = 30  # period of each active discovery
-        self.globals['discovery']['count'] = 0  # count of number of discoveries performed
+        self.globals[DISCOVERY]= dict()
+        self.globals[DISCOVERY][DISCOVERED_DEVICES] = dict()  # dict of nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
+        self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES] = dict()  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
+        self.globals[DISCOVERY][PERIOD] = 30  # period of each active discovery
+        self.globals[DISCOVERY][COUNT] = 0  # count of number of discoveries performed
 
         # Initialise dictionary to store message queues
-        self.globals['queues'] = {}
-        self.globals['queues']['messageToSend'] = ''  # Set-up in plugin start (used to process commands to be sent to the nanoleaf device)
-        self.globals['queues']['discovery'] = ''  # Set-up in plugin start (used to process command to invoke nanoleaf device discovery)
-        self.globals['queues']['returnedResponse'] = '' # Set-up in plugin start (a common returned response queue)
-        self.globals['queues']['initialised'] = False
+        self.globals[QUEUES] = dict()
+        self.globals[QUEUES][MESSAGE_TO_SEND] = ''  # Set-up in plugin start (used to process commands to be sent to the nanoleaf device)
+        self.globals[QUEUES][DISCOVERY] = ''  # Set-up in plugin start (used to process command to invoke nanoleaf device discovery)
+        self.globals[QUEUES][RETURNED_RESPONSE] = ''  # Set-up in plugin start (a common returned response queue)
+        self.globals[QUEUES][INITIALISED] = False
 
         # Initialise dictionary for polling thread
-        self.globals['polling'] = {}
-        self.globals['polling']['threadActive'] = False        
-        self.globals['polling']['status'] = False
-        self.globals['polling']['seconds'] = float(300.0)  # 5 minutes
-        self.globals['polling']['forceThreadEnd'] = False
-        self.globals['polling']['quiesced'] = False
-        self.globals['polling']['missedPollLimit'] = int(2)  # Default to 2 missed polls
-        self.globals['polling']['count'] = int(0)
-        self.globals['polling']['trigger'] = int(0)
+        self.globals[POLLING]= dict()
+        self.globals[POLLING][THREAD_ACTIVE] = False        
+        self.globals[POLLING][STATUS] = False
+        self.globals[POLLING][SECONDS] = float(300.0)  # 5 minutes
+        self.globals[POLLING][FORCE_THREAD_END] = False
+        self.globals[POLLING][QUIESCED] = False
+        self.globals[POLLING][MISSED_POLL_LIMIT] = int(2)  # Default to 2 missed polls
+        self.globals[POLLING][COUNT] = int(0)
+        self.globals[POLLING][TRIGGER] = int(0)
 
-        # Initialise dictionary for constants
-        self.globals['constant'] = {}
-        self.globals['constant']['defaultDatetime'] = datetime.strptime("2000-01-01","%Y-%m-%d")
+        self.globals[DEBUG_FILTERED_IP_ADDRESSES] = dict()
 
-        self.validatePrefsConfigUi(pluginPrefs)  # Validate the Plugin Config before plugin initialisation
+        self.validatePrefsConfigUi(plugin_prefs)  # Validate the Plugin Config before plugin initialisation
         
-        self.closedPrefsConfigUi(pluginPrefs, False)  # Set Plugin config options (as if the dialogue had been closed)
-
-        self.setDebuggingLevels(pluginPrefs)  # Check monitoring / debug / filtered IP address options
+        self.closedPrefsConfigUi(plugin_prefs, False)  # Set Plugin config options (as if the dialogue had been closed)
 
     def __del__(self):
 
         indigo.PluginBase.__del__(self)
 
-    def startup(self):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
+    def display_plugin_information(self):
+        try:
+            def plugin_information_message():
+                startup_message_ui = "Plugin Information:\n"
+                startup_message_ui += f"{'':={'^'}80}\n"
+                startup_message_ui += f"{'Plugin Name:':<30} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}\n"
+                startup_message_ui += f"{'Plugin Version:':<30} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}\n"
+                startup_message_ui += f"{'Plugin ID:':<30} {self.globals[PLUGIN_INFO][PLUGIN_ID]}\n"
+                startup_message_ui += f"{'Indigo Version:':<30} {indigo.server.version}\n"
+                startup_message_ui += f"{'Indigo License:':<30} {indigo.server.licenseStatus}\n"
+                startup_message_ui += f"{'Indigo API Version:':<30} {indigo.server.apiVersion}\n"
+                startup_message_ui += f"{'Architecture:':<30} {platform.machine()}\n"
+                startup_message_ui += f"{'Python Version:':<30} {sys.version.split(' ')[0]}\n"
+                startup_message_ui += f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}\n"
+                startup_message_ui += f"{'Plugin Process ID:':<30} {os.getpid()}\n"
+                startup_message_ui += f"{'':={'^'}80}\n"
+                return startup_message_ui
 
+            self.logger.info(plugin_information_message())
+
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
+
+    def exception_handler(self, exception_error_message, log_failing_statement):
+        filename, line_number, method, statement = traceback.extract_tb(sys.exc_info()[2])[-1]
+        module = filename.split('/')
+        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method}'"
+        if log_failing_statement:
+            log_message = log_message + f"\n   Failing statement [line {line_number}]: '{statement}'"
+        else:
+            log_message = log_message + f" at line {line_number}"
+        self.logger.error(log_message)
+
+    def startup(self):
         indigo.devices.subscribeToChanges()
 
         # nanoleaf device internal storage initialisation
 
         for dev in indigo.devices.iter("self"):
-            self.generalLogger.debug(u'nanoleaf Indigo Device: {} [{} = {}]'.format(dev.name, dev.states['ipAddress'], dev.address))
-            self.globals['nl'][dev.id] = {}
-            self.globals['nl'][dev.id]['started']                 = False
-            self.globals['nl'][dev.id]['initialisedFromdevice']   = False
-            self.globals['nl'][dev.id]['nlDeviceid']              = dev.address  # eg. 'd0:73:d5:0a:bc:de' (psuedo mac address)
-            self.globals['nl'][dev.id]['authToken']               = ''
-            self.globals['nl'][dev.id]['nanoleafObject']          = None
-            self.globals['nl'][dev.id]['ipAddress']               = '{}'.format(dev.pluginProps.get('ipAddress', ''))
-            self.globals['nl'][dev.id]['lastResponseToPollCount'] = 0
-            self.globals['nl'][dev.id]['effectsList']             = []
-            dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status i.e. communication still to be established
+            self.logger.debug(f'nanoleaf Indigo Device: {dev.name} [{dev.states["ipAddress"]} = {dev.address}]')
+            self.globals[NL][dev.id]= dict()
+            self.globals[NL][dev.id][STARTED]                  = False
+            self.globals[NL][dev.id][INITIALISED_FROM_DEVICE]  = False
+            self.globals[NL][dev.id][NL_DEVICE_PSEUDO_ADDRESS] = dev.address  # eg. 'd0:73:d5:0a:bc:de' (psuedo mac address)
+            self.globals[NL][dev.id][AUTH_TOKEN]               = ""
+            self.globals[NL][dev.id][NANOLEAF_OBJECT]          = None
+            self.globals[NL][dev.id][IP_ADDRESS]               = f"{dev.pluginProps.get('ipAddress', '')}"
+            self.globals[NL][dev.id][LAST_RESPONSE_TO_POLL_COUNT] = 0
+            self.globals[NL][dev.id][EFFECTS_LIST]             = []
+            dev.setErrorStateOnServer("no ack")  # Default to 'no ack' status i.e. communication still to be established
 
         # Create process queues
-        self.globals['queues']['messageToSend'] = Queue.PriorityQueue()  # Used to queue commands to be sent to nanoleaf devices
-        self.globals['queues']['discovery'] = Queue.PriorityQueue()  # Used to queue command for nanoleaf device discovery
-        self.globals['queues']['initialised'] = True
+        self.globals[QUEUES][MESSAGE_TO_SEND] = queue.PriorityQueue()  # Used to queue commands to be sent to nanoleaf devices
+        self.globals[QUEUES][DISCOVERY] = queue.PriorityQueue()  # Used to queue command for nanoleaf device discovery
+        self.globals[QUEUES][INITIALISED] = True
 
         # define and start threads that will send messages to & receive messages from the nanoleaf devices and handle discovery
-        self.globals['threads']['sendReceiveMessages'] = ThreadSendReceiveMessages([self.globals])
-        self.globals['threads']['sendReceiveMessages'].start()
-        self.globals['threads']['discovery'] = ThreadDiscovery([self.globals])
-        self.globals['threads']['discovery'].start()
+        self.globals[THREADS][SEND_RECEIVE_MESSAGES] = ThreadSendReceiveMessages([self.globals])
+        self.globals[THREADS][SEND_RECEIVE_MESSAGES].start()
+        self.globals[THREADS][DISCOVERY] = ThreadDiscovery([self.globals])
+        self.globals[THREADS][DISCOVERY].start()
 
-        if self.globals['polling']['status'] == True and self.globals['polling']['threadActive'] == False:
-            self.globals['threads']['polling']['event']  = threading.Event()
-            self.globals['threads']['polling']['thread'] = ThreadPolling([self.globals, self.globals['threads']['polling']['event']])
-            self.globals['threads']['polling']['thread'].start()
+        if self.globals[POLLING][STATUS] and not self.globals[POLLING][THREAD_ACTIVE]:
+            self.globals[THREADS][POLLING][EVENT]  = threading.Event()
+            self.globals[THREADS][POLLING][THREAD] = ThreadPolling([self.globals, self.globals[THREADS][POLLING][EVENT]])
+            self.globals[THREADS][POLLING][THREAD].start()
 
-        self.globals['discovery']['period'] = float(self.pluginPrefs.get("defaultDiscoveryPeriod", 30))
+        self.globals[DISCOVERY][PERIOD] = float(self.pluginPrefs.get("defaultDiscoveryPeriod", 30))
 
-        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
+        self.globals[QUEUES][DISCOVERY].put([QUEUE_PRIORITY_LOW, COMMAND_DISCOVERY, []])
  
-        self.globals['startupCompleted'] = True  # Enable runConcurrentThread to commence processing
+        self.globals[STARTUP_COMPLETED] = True  # Enable runConcurrentThread to commence processing
 
-        self.generalLogger.info(u'{} initialization complete'.format(PLUGIN_TITLE))
+        self.logger.info(u'{} initialization complete'.format(PLUGIN_TITLE))
         
     def shutdown(self):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        if self.globals['polling']['threadActive'] == True:
-            self.globals['polling']['forceThreadEnd'] = True
-            self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
+        if self.globals[POLLING][THREAD_ACTIVE]:
+            self.globals[POLLING][FORCE_THREAD_END] = True
+            self.globals[THREADS][POLLING][EVENT].set()  # Stop the Polling Thread
 
-        self.generalLogger.info(u'{} Plugin shutdown complete'.format(PLUGIN_TITLE))
-
+        self.logger.info(u'{} Plugin shutdown complete'.format(PLUGIN_TITLE))
 
     def validatePrefsConfigUi(self, valuesDict):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
-
-        try: 
-
+        try:
             if 'overrideHostIpAddress' in valuesDict:
                 if bool(valuesDict.get('overrideHostIpAddress', False)):
                     if valuesDict.get('overriddenHostIpAddress', '') == '':
@@ -185,26 +207,26 @@ class Plugin(indigo.PluginBase):
                         return (False, valuesDict, errorDict)
 
             if "statusPolling" in valuesDict:
-                self.globals['polling']['status'] = bool(valuesDict["statusPolling"])
+                self.globals[POLLING][STATUS] = bool(valuesDict["statusPolling"])
             else:
-                self.globals['polling']['status'] = False
+                self.globals[POLLING][STATUS] = False
 
             # No need to validate this as value can only be selected from a pull down list?
             if "pollingSeconds" in valuesDict:
-                self.globals['polling']['seconds'] = float(valuesDict["pollingSeconds"])
+                self.globals[POLLING][SECONDS] = float(valuesDict["pollingSeconds"])
             else:
-                self.globals['polling']['seconds'] = float(300.0)  # Default to 5 minutes
+                self.globals[POLLING][SECONDS] = float(300.0)  # Default to 5 minutes
 
             if "missedPollLimit" in valuesDict:
                 try:
-                    self.globals['polling']['missedPollLimit'] = int(valuesDict["missedPollLimit"])
+                    self.globals[POLLING][MISSED_POLL_LIMIT] = int(valuesDict["missedPollLimit"])
                 except:
                     errorDict = indigo.Dict()
                     errorDict["missedPollLimit"] = "Invalid number for missed polls limit"
                     errorDict["showAlertText"] = "The number of missed polls limit must be specified as an integer e.g 2, 5 etc."
                     return (False, valuesDict, errorDict)
             else:
-                self.globals['polling']['missedPollLimit'] = int(2)  # Default to 2 missed polls
+                self.globals[POLLING][MISSED_POLL_LIMIT] = int(2)  # Default to 2 missed polls
 
             if "defaultDiscoveryPeriod" in valuesDict:
                 try:
@@ -215,31 +237,41 @@ class Plugin(indigo.PluginBase):
                     errorDict["showAlertText"] = "The number of seconds must be specified as an integer e.g. 10, 20 etc."
                     return (False, valuesDict, errorDict)
             else:
-                self.globals['discovery']['period'] = float(30.0)  # Default to 30 seconds  
+                self.globals[DISCOVERY][PERIOD] = float(30.0)  # Default to 30 seconds  
 
             return True
 
-        except StandardError, e:
-            self.generalLogger.error(u'validatePrefsConfigUi error detected. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
-            return True
-
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'\'closePrefsConfigUi\' called with userCancelled = {}'.format(userCancelled))
+        self.logger.debug(f'\'closePrefsConfigUi\' called with userCancelled = {userCancelled}')
 
-        if userCancelled == True:
+        if userCancelled:
             return
+
+        # Get required Event Log and Plugin Log logging levels
+        plugin_log_level = int(valuesDict.get("pluginLogLevel", LOG_LEVEL_INFO))
+        event_log_level = int(valuesDict.get("eventLogLevel", LOG_LEVEL_INFO))
+
+        # Ensure following logging level messages are output
+        self.indigo_log_handler.setLevel(LOG_LEVEL_INFO)
+        self.plugin_file_handler.setLevel(LOG_LEVEL_INFO)
+
+        # Output required logging levels and TP Message Monitoring requirement to logs
+        self.logger.info(f"Logging to Indigo Event Log at the '{LOG_LEVEL_TRANSLATION[event_log_level]}' level")
+        self.logger.info(f"Logging to Plugin Event Log at the '{LOG_LEVEL_TRANSLATION[plugin_log_level]}' level")
+
+        # Now set required logging levels
+        self.indigo_log_handler.setLevel(event_log_level)
+        self.plugin_file_handler.setLevel(plugin_log_level)
 
         # Set Host IP Address override
         if bool(valuesDict.get('overrideHostIpAddress', False)): 
-            self.globals['overriddenHostIpAddress'] = valuesDict.get('overriddenHostIpAddress', '')
-            if self.globals['overriddenHostIpAddress'] != '':
-                self.generalLogger.info(u'Host IP Address overridden and specified as: \'{}\''.format(valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
-
-        # Check monitoring / debug / filered IP address options  
-        self.setDebuggingLevels(valuesDict)
+            self.globals[OVERRIDDEN_HOST_IP_ADDRESS] = valuesDict.get('overriddenHostIpAddress', '')
+            if self.globals[OVERRIDDEN_HOST_IP_ADDRESS] != '':
+                self.logger.info(u'Host IP Address overridden and specified as: \'{}\''.format(valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
 
         # Following logic checks whether polling is required.
         # If it isn't required, then it checks if a polling thread exists and if it does it ends it
@@ -251,26 +283,24 @@ class Plugin(indigo.PluginBase):
         # If polling is required and a polling thread exists, then the logic 'sets' an event to cause the polling thread to awaken and
         #   update the polling interval
 
-        if self.globals['polling']['status'] == False:
-            if self.globals['polling']['threadActive'] == True:
-                self.globals['polling']['forceThreadEnd'] = True
-                self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
-                self.globals['threads']['polling']['thread'].join(5.0)  # Wait for up t0 5 seconds for it to end
-                del self.globals['threads']['polling']['thread']  # Delete thread so that it can be recreated if polling is turned on again
+        if not self.globals[POLLING][STATUS]:
+            if self.globals[POLLING][THREAD_ACTIVE]:
+                self.globals[POLLING][FORCE_THREAD_END] = True
+                self.globals[THREADS][POLLING][EVENT].set()  # Stop the Polling Thread
+                self.globals[THREADS][POLLING][THREAD].join(5.0)  # Wait for up t0 5 seconds for it to end
+                del self.globals[THREADS][POLLING][THREAD]  # Delete thread so that it can be recreated if polling is turned on again
         else:
-            if self.globals['polling']['threadActive'] == False:
-                if self.globals['queues']['initialised'] == True:
-                    self.globals['polling']['forceThreadEnd'] = False
-                    self.globals['threads']['polling']['event'] = threading.Event()
-                    self.globals['threads']['polling']['thread'] = ThreadPolling([self.globals, self.globals['threads']['polling']['event']])
-                    self.globals['threads']['polling']['thread'].start()
+            if not self.globals[POLLING][THREAD_ACTIVE]:
+                if self.globals[QUEUES][INITIALISED]:
+                    self.globals[POLLING][FORCE_THREAD_END] = False
+                    self.globals[THREADS][POLLING][EVENT] = threading.Event()
+                    self.globals[THREADS][POLLING][THREAD] = ThreadPolling([self.globals, self.globals[THREADS][POLLING][EVENT]])
+                    self.globals[THREADS][POLLING][THREAD].start()
             else:
-                self.globals['polling']['forceThreadEnd'] = False
-                self.globals['threads']['polling']['event'].set()  # cause the Polling Thread to update immediately with potentially new polling seconds value
-
+                self.globals[POLLING][FORCE_THREAD_END] = False
+                self.globals[THREADS][POLLING][EVENT].set()  # cause the Polling Thread to update immediately with potentially new polling seconds value
 
     def setDebuggingLevels(self, valuesDict):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         # set filered IP address
 
@@ -286,9 +316,9 @@ class Plugin(indigo.PluginBase):
                     self.globals['debug']['debugFilteredIpAddressesUI'] += ', ' + ipAddress
                     
             if len(self.globals['debug']['debugFilteredIpAddresses']) == 1:    
-                self.generalLogger.warning(u'Filtering on nanoleaf Device with IP Address: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))
+                self.logger.warning(u'Filtering on nanoleaf Device with IP Address: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))
             else:  
-                self.generalLogger.warning(u'Filtering on nanoleaf Devices with IP Addresses: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))  
+                self.logger.warning(u'Filtering on nanoleaf Devices with IP Addresses: {}'.format(self.globals['debug']['debugFilteredIpAddressesUI']))  
 
         self.globals['debug']['monitorDebugEnabled'] = bool(valuesDict.get("monitorDebugEnabled", False))
 
@@ -315,7 +345,7 @@ class Plugin(indigo.PluginBase):
 
         if debugGeneral:
             self.globals['debug']['debugGeneral'] = logging.DEBUG  # For general debugging of the main thread
-            self.generalLogger.setLevel(self.globals['debug']['debugGeneral'])
+            self.logger.setLevel(self.globals['debug']['debugGeneral'])
         if monitorSendReceive:
             self.globals['debug']['monitorSendReceive'] = logging.DEBUG  # For logging messages sent to nanoleaf devices 
         if debugSendReceive:
@@ -334,10 +364,10 @@ class Plugin(indigo.PluginBase):
         self.globals['debug']['debugActive'] = debugGeneral or debugSendReceive or debugDiscovery or debugMethodTrace or debugPolling
 
         if not self.globals['debug']['monitorDebugEnabled'] or (not self.globals['debug']['monitoringActive'] and not self.globals['debug']['debugActive']):
-            self.generalLogger.info(u"No monitoring or debugging requested")
+            self.logger.info("No monitoring or debugging requested")
         else:
             if not self.globals['debug']['monitoringActive']:
-                self.generalLogger.info(u"No monitoring requested")
+                self.logger.info("No monitoring requested")
             else:
                 monitorTypes = []
                 if monitorSendReceive:
@@ -345,10 +375,10 @@ class Plugin(indigo.PluginBase):
                 if monitorDiscovery:
                     monitorTypes.append('Discovery')
                 message = self.listActive(monitorTypes)   
-                self.generalLogger.warning(u'Monitoring enabled for nanoleaf device: {}'.format(message))  
+                self.logger.warning(u'Monitoring enabled for nanoleaf device: {}'.format(message))  
 
             if not self.globals['debug']['debugActive']:
-                self.generalLogger.info(u"No debugging requested")
+                self.logger.info("No debugging requested")
             else:
                 debugTypes = []
                 if debugGeneral:
@@ -362,10 +392,9 @@ class Plugin(indigo.PluginBase):
                 if debugPolling:
                     debugTypes.append('Polling')
                 message = self.listActive(debugTypes)   
-                self.generalLogger.warning(u'Debugging enabled for nanoleaf device: {}'.format(message))  
+                self.logger.warning(u'Debugging enabled for nanoleaf device: {}'.format(message))  
 
     def listActive(self, monitorDebugTypes):            
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         loop = 0
         listedTypes = ''
@@ -378,53 +407,51 @@ class Plugin(indigo.PluginBase):
         return listedTypes
 
     def runConcurrentThread(self):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         # This thread is used to detect plugin close down and check for updates
         try:
-            while not self.globals['startupCompleted']:
+            while not self.globals[STARTUP_COMPLETED]:
                 self.sleep(10)  # Allow startup to complete
 
             while True:
                 self.sleep(300) # 5 minutes in seconds
 
         except self.StopThread:
-            self.generalLogger.info(u'{} Plugin shutdown requested'.format(PLUGIN_TITLE))
+            self.logger.info(u'{} Plugin shutdown requested'.format(PLUGIN_TITLE))
 
-            self.generalLogger.debug(u"runConcurrentThread being ended . . .") 
+            self.logger.debug("runConcurrentThread being ended . . .")
 
-            if 'sendReceiveMessages' in self.globals['threads']:
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
+            if 'sendReceiveMessages' in self.globals[THREADS]:
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STOP_THREAD, COMMAND_STOP_THREAD, []])
 
-            if 'discovery' in self.globals['threads']:
-                self.globals['queues']['discovery'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
+            if 'discovery' in self.globals[THREADS]:
+                self.globals[QUEUES][DISCOVERY].put([QUEUE_PRIORITY_STOP_THREAD, COMMAND_STOP_THREAD, []])
 
-            if self.globals['polling']['threadActive'] == True:
-                self.globals['polling']['forceThreadEnd'] = True
-                self.globals['threads']['polling']['event'].set()  # Stop the Polling Thread
-                self.globals['threads']['polling']['thread'].join(7.0)  # wait for thread to end
-                self.generalLogger.debug(u"Polling thread now stopped")
+            if self.globals[POLLING][THREAD_ACTIVE] == True:
+                self.globals[POLLING][FORCE_THREAD_END] = True
+                self.globals[THREADS][POLLING][EVENT].set()  # Stop the Polling Thread
+                self.globals[THREADS][POLLING][THREAD].join(7.0)  # wait for thread to end
+                self.logger.debug("Polling thread now stopped")
 
-            if 'sendReceiveMessages' in self.globals['threads']:
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
-                self.globals['threads']['sendReceiveMessages'].join(7.0)  # wait for thread to end
-                self.generalLogger.debug(u"SendReceive thread now stopped")
+            if 'sendReceiveMessages' in self.globals[THREADS]:
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STOP_THREAD, COMMAND_STOP_THREAD, []])
+                self.globals[THREADS][SEND_RECEIVE_MESSAGES].join(7.0)  # wait for thread to end
+                self.logger.debug("SendReceive thread now stopped")
 
-            if 'discovery' in self.globals['threads']:
-                self.globals['queues']['discovery'].put([QUEUE_PRIORITY_STOP_THREAD, 'STOPTHREAD', []])
-                self.globals['threads']['discovery'].join(7.0)  # wait for thread to end
-                self.generalLogger.debug(u"Discovery thread now stopped")
+            if 'discovery' in self.globals[THREADS]:
+                self.globals[QUEUES][DISCOVERY].put([QUEUE_PRIORITY_STOP_THREAD, COMMAND_STOP_THREAD, []])
+                self.globals[THREADS][DISCOVERY].join(7.0)  # wait for thread to end
+                self.logger.debug("Discovery thread now stopped")
 
-        self.generalLogger.debug(u". . . runConcurrentThread now ended")   
+        self.logger.debug(". . . runConcurrentThread now ended")
 
     def deviceStartComm(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         try:
-            self.generalLogger.info(u'Starting  \'{}\' . . .'.format(dev.name))
+            self.logger.info(u'Starting  \'{}\' . . .'.format(dev.name))
 
             if dev.deviceTypeId != "nanoleafDevice":
-                self.generalLogger.error(u'Failed to start device [{}]: Device type [{}] not known by plugin.'.format(dev.name, dev.deviceTypeId))
+                self.logger.error(u'Failed to start device [{}]: Device type [{}] not known by plugin.'.format(dev.name, dev.deviceTypeId))
                 return
 
             dev.stateListOrDisplayStateIdChanged()  # Ensure latest devices.xml is being used
@@ -493,150 +520,141 @@ class Plugin(indigo.PluginBase):
                 return
 
             # Initialise internal to plugin nanoleaf device states to default values
-            if dev.id not in self.globals['nl']:
-                self.globals['nl'][dev.id] = {}
-            self.globals['nl'][dev.id]['started']                 = False
-            self.globals['nl'][dev.id]['datetimeStarted']         = indigo.server.getTime()
-            self.globals['nl'][dev.id]['initialisedFromdevice']   = False
-            self.globals['nl'][dev.id]['nlDeviceid']              = dev.address  # eg. 'd0:73:d5:0a:bc:de' (psuedo mac address)
-            self.globals['nl'][dev.id]['authToken']               = str(dev.pluginProps.get('authToken', ''))
-            self.globals['nl'][dev.id]['nanoleafObject']          = None
-            self.globals['nl'][dev.id]['ipAddress']               = str(dev.pluginProps.get('ipAddress', ''))
-            self.globals['nl'][dev.id]['macAddress']              = str(dev.pluginProps.get('macAddress', ''))
-            self.globals['nl'][dev.id]['lastResponseToPollCount'] = 0 
-            self.globals['nl'][dev.id]['effectsList']             = []
-            dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status i.e. communication still to be established
+            if dev.id not in self.globals[NL]:
+                self.globals[NL][dev.id]= dict()
+            self.globals[NL][dev.id][STARTED]                  = False
+            self.globals[NL][dev.id][DATE_TIME_STARTED]        = indigo.server.getTime()
+            self.globals[NL][dev.id][INITIALISED_FROM_DEVICE]  = False
+            self.globals[NL][dev.id][NL_DEVICE_PSEUDO_ADDRESS] = dev.address  # e.g. "d0:73:d5:0a:bc:de" (psuedo mac address)
+            self.globals[NL][dev.id][AUTH_TOKEN]               = str(dev.pluginProps.get('authToken', ''))
+            self.globals[NL][dev.id][NANOLEAF_OBJECT]          = None
+            self.globals[NL][dev.id][IP_ADDRESS]               = str(dev.pluginProps.get('ipAddress', ''))
+            self.globals[NL][dev.id][MAC_ADDRESS]              = str(dev.pluginProps.get('macAddress', ''))
+            self.globals[NL][dev.id][LAST_RESPONSE_TO_POLL_COUNT] = 0 
+            self.globals[NL][dev.id][EFFECTS_LIST]             = []
+            self.globals[NL][dev.id][CONNECTION_RETRIES] = 0
+            dev.setErrorStateOnServer("no ack")  # Default to 'no ack' status i.e. communication still to be established
 
             # Check if ip address debug filter(s) active
-            if (len(self.globals['debug']['debugFilteredIpAddresses']) > 0) and (dev.states['ipAddress'] not in self.globals['debug']['debugFilteredIpAddresses']):
-                self.generalLogger.info(u'Start NOT performed for \'{}\' as nanoleaf device with ip address \'{}\' not included in start filter'.format(dev.name, dev.states['ipAddress']))
-                return
+            # if (len(self.globals['debug']['debugFilteredIpAddresses']) > 0) and (dev.states[IP_ADDRESS] not in self.globals['debug']['debugFilteredIpAddresses']):
+            #     self.logger.info(u'Start NOT performed for \'{}\' as nanoleaf device with ip address \'{}\' not included in start filter'.format(dev.name, dev.states[IP_ADDRESS]))
+            #     return
 
-            self.globals['nl'][dev.id]['onState']     = False      # True or False
-            self.globals['nl'][dev.id]['onOffState']  = 'off'      # 'on' or 'off'
+            self.globals[NL][dev.id][ONSTATE]     = False      # True or False
+            self.globals[NL][dev.id][ONOFFSTATE]  = 'off'      # 'on' or 'off'
 
-            if self.globals['nl'][dev.id]['authToken'] == '':
-                self.generalLogger.error(u'Unable to start \'{}\' as device not authorised. Edit Device settings and follow instructions on how to authorise device.'.format(dev.name))
+            if self.globals[NL][dev.id][AUTH_TOKEN] == '':
+                self.logger.error(u'Unable to start \'{}\' as device not authorised. Edit Device settings and follow instructions on how to authorise device.'.format(dev.name))
             else:
-                self.globals['nl'][dev.id]["started"] = True
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [dev.id]])
-                self.generalLogger.info(u'. . . Started \'{}\''.format(dev.name))
+                self.globals[NL][dev.id][STARTED] = True
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_MEDIUM, COMMAND_STATUS, [dev.id]])
+                self.logger.info(u'. . . Started \'{}\''.format(dev.name))
 
-        except StandardError, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u'deviceStartComm: StandardError detected for \'{}\' at line \'{}\' = {}'.format(dev.name, exc_tb.tb_lineno,  e))   
-
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def deviceStopComm(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
+        
 
-        self.generalLogger.info(u'Stopping \'{}\''.format(dev.name))
+        self.logger.info(u'Stopping \'{}\''.format(dev.name))
 
-        dev.setErrorStateOnServer(u"no ack")  # Default to 'no ack' status
+        dev.setErrorStateOnServer("no ack")  # Default to 'no ack' status
 
-        if dev.id in self.globals['nl']:
-            self.globals['nl'][dev.id]["started"] = False
-
+        if dev.id in self.globals[NL]:
+            self.globals[NL][dev.id][STARTED] = False
 
     def deviceDeleted(self, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         if dev.deviceTypeId == "nanoleafDevice": 
             self.deviceStopComm(dev)
-            if dev.id in self.globals['nl']:
-                nlDeviceid = self.globals['nl'][dev.id]['nlDeviceid']
-                nlIpAddress = self.globals['nl'][dev.id]['ipAddress']
-                nlMacAddress = self.globals['nl'][dev.id]['macAddress']
-                del self.globals['nl'][dev.id]  # Delete internal storage for device
+            if dev.id in self.globals[NL]:
+                nlDeviceid = self.globals[NL][dev.id][NL_DEVICE_PSEUDO_ADDRESS]
+                nlIpAddress = self.globals[NL][dev.id][IP_ADDRESS]
+                nlMacAddress = self.globals[NL][dev.id][MAC_ADDRESS]
+                del self.globals[NL][dev.id]  # Delete internal storage for device
 
                 if nlDeviceid != '':
                     # Make device available for adding as a new device
-                    self.globals['discovery']['discoveredUnmatchedDevices'][nlDeviceid] = (nlIpAddress, nlMacAddress)            
+                    self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES][nlDeviceid] = (nlIpAddress, nlMacAddress)            
 
     def getDeviceConfigUiValues(self, pluginProps, typeId, devId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         try:
-            self.generalLogger.debug(u'getDeviceConfigUiValues: typeId [{}], actionId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
+            self.logger.debug(u'getDeviceConfigUiValues: typeId [{}], actionId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
 
             nanoleafDev = indigo.devices[devId]
 
             errorDict = indigo.Dict()
             valuesDict = pluginProps
 
-            valuesDict['nanoleafAvailable'] = 'true'
-            valuesDict['nanoleafDevice'] = 'SELECT_AVAILABLE'
-            valuesDict['nanoleafDeviceId'] = nanoleafDev.pluginProps.get('address', '')
-            valuesDict['macAddress'] = nanoleafDev.pluginProps.get('macAddress', '')
-            valuesDict['ipAddress'] = nanoleafDev.pluginProps.get('ipAddress', '')
-            valuesDict['authToken'] = nanoleafDev.pluginProps.get('authToken', '')
+            valuesDict["nanoleafAvailable"] = "true"
+            valuesDict["nanoleafDevice"] = "SELECT_AVAILABLE"
+            valuesDict["nanoleafDeviceId"] = nanoleafDev.pluginProps.get("address", '')
+            valuesDict["macAddress"] = nanoleafDev.pluginProps.get("macAddress", '')
+            valuesDict["ipAddress"] = nanoleafDev.pluginProps.get("ipAddress", '')
+            valuesDict["authToken"] = nanoleafDev.pluginProps.get("authToken", '')
             
             return (valuesDict, errorDict)
 
-        except StandardError, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u'getDeviceConfigUiValues: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[devId].name, exc_tb.tb_lineno,  e))
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         nanoleafDev = indigo.devices[devId]
 
-        if valuesDict['nanoleafDeviceId'] in self.globals['discovery']['discoveredUnmatchedDevices']:
-            del self.globals['discovery']['discoveredUnmatchedDevices'][valuesDict['nanoleafDeviceId']]
+        if valuesDict["nanoleafDeviceId"] in self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES]:
+            del self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES][valuesDict["nanoleafDeviceId"]]
 
         keyValueList = [
-            {'key': 'nanoleafDeviceId', 'value': valuesDict['nanoleafDeviceId']},
-            {'key': 'macAddress', 'value': valuesDict['macAddress']},
-            {'key': 'ipAddress', 'value': valuesDict['ipAddress']},
-            {'key': 'authToken', 'value': valuesDict['authToken']}
+            {"key": "nanoleafDeviceId", "value": valuesDict["nanoleafDeviceId"]},
+            {"key": "macAddress", "value": valuesDict["macAddress"]},
+            {"key": "ipAddress", "value": valuesDict["ipAddress"]},
+            {"key": "authToken", "value": valuesDict["authToken"]}
         ]
         nanoleafDev.updateStatesOnServer(keyValueList)
      
-        valuesDict["address"] = valuesDict['nanoleafDeviceId']
+        valuesDict["address"] = valuesDict["nanoleafDeviceId"]
 
-        if valuesDict['nanoleafDeviceId'] in self.globals['discovery']['discoveredUnmatchedDevices']:
-            del self.globals['discovery']['discoveredUnmatchedDevices'][valuesDict['nanoleafDeviceId']]
+        if valuesDict["nanoleafDeviceId"] in self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES]:
+            del self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES][valuesDict["nanoleafDeviceId"]]
 
         return (True, valuesDict)
 
     def getActionConfigUiValues(self, pluginProps, typeId, devId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
+        
 
-        self.generalLogger.debug(u'getActionConfigUiValues: typeId [{}], devId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
+        self.logger.debug(u'getActionConfigUiValues: typeId [{}], devId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
 
         errorDict = indigo.Dict()
         valuesDict = pluginProps
 
         if typeId == "setEffect":
-            if ('effectList' not in valuesDict) or (valuesDict["effectList"] == '') or (len(self.globals['nl'][devId]['effectsList']) == 0):
+            if ('effectList' not in valuesDict) or (valuesDict["effectList"] == '') or (len(self.globals[NL][devId][EFFECTS_LIST]) == 0):
                 valuesDict["effectList"] = 'SELECT_EFFECT'
         return (valuesDict, errorDict)
 
 
     def validateActionConfigUi(self, valuesDict, typeId, actionId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         errorsDict = indigo.Dict()
 
         if typeId == "setEffect":
             validateResult = self.validateActionConfigUiSetEffect(valuesDict, typeId, actionId)
         else:
-            self.generalLogger.debug(u'validateActionConfigUi [UNKNOWN]: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
+            self.logger.debug(u'validateActionConfigUi [UNKNOWN]: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
             return (True, valuesDict)
 
         if validateResult[0] == True:
             return (True, validateResult[1])
         else:
             return (False, validateResult[1], validateResult[2])
-
  
     def validateActionConfigUiSetEffect(self, valuesDict, typeId, actionId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'validateActionConfigUiSpecific: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
+        self.logger.debug(u'validateActionConfigUiSpecific: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
 
-        if valuesDict['effectList'] == 'SELECT_EFFECT':
+        if valuesDict["effectList"] == "SELECT_EFFECT":
             errorDict = indigo.Dict()
             errorDict["effectList"] = "No Effect selected"
             errorDict["showAlertText"] = "You must select an effect for the action to send to the nanoleaf device"
@@ -644,69 +662,61 @@ class Plugin(indigo.PluginBase):
 
         return (True, valuesDict)
 
-
     def openedActionConfigUi(self, valuesDict, typeId, actionId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u"openedActionConfigUi intercepted")
+        self.logger.debug("openedActionConfigUi intercepted")
 
         return valuesDict
 
     def getMenuActionConfigUiValues(self, menuId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         valuesDict = indigo.Dict()
         errorMsgDict = indigo.Dict() 
 
-        self.generalLogger.debug(u'getMenuActionConfigUiValues: menuId = {}'.format(menuId))
+        self.logger.debug(f'getMenuActionConfigUiValues: menuId = {menuId}')
 
         # if menuId == "yourMenuItemId":
         #  valuesDict["someFieldId"] = someDefaultValue
         return (valuesDict, errorMsgDict)
 
-
     def actionControlUniversal(self, action, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        ###### STATUS REQUEST ######
+        # ##### STATUS REQUEST ######
         if action.deviceAction == indigo.kUniversalAction.RequestStatus:
             self._processStatus(action, dev)
 
-
     def _processStatus(self, pluginAction, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [dev.id]])
-        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, "status request"))
-
+        self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_MEDIUM, COMMAND_STATUS, [dev.id]])
+        self.logger.info(u'sent \'{}\' {}'.format(dev.name, "status request"))
 
     def actionControlDevice(self, action, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
-        if dev.states['connected'] == False or self.globals['nl'][dev.id]['started'] == False:
-            self.generalLogger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(action.deviceAction, dev.name))
+        
+        if dev.states['connected'] == False or self.globals[NL][dev.id][STARTED] == False:
+            self.logger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(action.deviceAction, dev.name))
             return
 
-        ###### TURN ON ######
+        # ##### TURN ON ######
         if action.deviceAction ==indigo.kDeviceAction.TurnOn:
             self._processTurnOn(action, dev)
 
-        ###### TURN OFF ######
+        # ##### TURN OFF ######
         elif action.deviceAction ==indigo.kDeviceAction.TurnOff:
             self._processTurnOff(action, dev)
 
-        ###### TOGGLE ######
+        # ##### TOGGLE ######
         elif action.deviceAction ==indigo.kDeviceAction.Toggle:
             self._processTurnOnOffToggle(action, dev)
 
-        ###### SET BRIGHTNESS ######
+        # ##### SET BRIGHTNESS ######
         elif action.deviceAction ==indigo.kDeviceAction.SetBrightness:
             newBrightness = action.actionValue  #  action.actionValue contains brightness value (0 - 100)
             self._processBrightnessSet(action, dev, newBrightness)
 
-        ###### BRIGHTEN BY ######
+        # ##### BRIGHTEN BY ######
         elif action.deviceAction ==indigo.kDeviceAction.BrightenBy:
             if not dev.onState:
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'IMMEDIATE-ON', [dev.id]])
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_IMMEDIATE_ON, [dev.id]])
 
             if dev.brightness < 100:
                 brightenBy = action.actionValue #  action.actionValue contains brightness increase value
@@ -714,12 +724,12 @@ class Plugin(indigo.PluginBase):
                 if newBrightness > 100:
                     newBrightness = 100
                     brightenBy = 100 - dev.brightness
-                self.generalLogger.info(u'Brightening {} by {} to {}'.format(dev.name, brightenBy, newBrightness))
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'BRIGHTEN', [dev.id, brightenBy]])
+                self.logger.info(u'Brightening {} by {} to {}'.format(dev.name, brightenBy, newBrightness))
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_BRIGHTEN, [dev.id, brightenBy]])
             else:
-                self.generalLogger.info(u'Ignoring Brighten request for {}} as device is at full brightness'.format(dev.name))
+                self.logger.info(u'Ignoring Brighten request for {}} as device is at full brightness'.format(dev.name))
 
-        ###### DIM BY ######
+        # ##### DIM BY ######
         elif action.deviceAction ==indigo.kDeviceAction.DimBy:
             if dev.onState and dev.brightness > 0: 
                 dimBy = action.actionValue #  action.actionValue contains brightness decrease value
@@ -727,38 +737,35 @@ class Plugin(indigo.PluginBase):
                 if newBrightness < 0:
                     newBrightness = 0
                     dimBy = dev.brightness
-                self.generalLogger.info(u'Dimming {} by {} to {}'.format(dev.name, dimBy, newBrightness))
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'DIM', [dev.id, dimBy]])
+                self.logger.info(u'Dimming {} by {} to {}'.format(dev.name, dimBy, newBrightness))
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_DIM, [dev.id, dimBy]])
             else:
-                self.generalLogger.info(u'Ignoring Dim request for {} as device is Off'.format(dev.name))
+                self.logger.info(u'Ignoring Dim request for {} as device is Off'.format(dev.name))
 
-        ###### SET COLOR LEVELS ######
+        # ##### SET COLOR LEVELS ######
         elif action.deviceAction ==indigo.kDeviceAction.SetColorLevels:
-            self.generalLogger.debug(u'SET COLOR LEVELS = \'{}\' {}'.format(dev.name, action))
+            self.logger.debug(u'SET COLOR LEVELS = \'{}\' {}'.format(dev.name, action))
             self._processSetColorLevels(action, dev)
 
     def _processTurnOn(self, pluginAction, dev, actionUi='on'):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
+        
+        self.logger.debug(u'nanoleaf \'processTurnOn\' [{}]'.format(self.globals[NL][dev.id][IP_ADDRESS])) 
 
-        self.generalLogger.debug(u'nanoleaf \'processTurnOn\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
+        self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_ON, [dev.id]])
 
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'ON', [dev.id]])
-
-        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
+        self.logger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
 
     def _processTurnOff(self, pluginAction, dev, actionUi='off'):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'nanoleaf \'processTurnOff\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
+        self.logger.debug(u'nanoleaf \'processTurnOff\' [{}]'.format(self.globals[NL][dev.id][IP_ADDRESS])) 
 
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'OFF', [dev.id]])
+        self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_OFF, [dev.id]])
 
-        self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
+        self.logger.info(u'sent \'{}\' {}'.format(dev.name, actionUi))
 
     def _processTurnOnOffToggle(self, pluginAction, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'nanoleaf \'processTurnOnOffToggle\' [{}]'.format(self.globals['nl'][dev.id]['ipAddress'])) 
+        self.logger.debug(u'nanoleaf \'processTurnOnOffToggle\' [{}]'.format(self.globals[NL][dev.id][IP_ADDRESS])) 
 
         onStateRequested = not dev.onState
         if onStateRequested == True:
@@ -769,25 +776,21 @@ class Plugin(indigo.PluginBase):
             self._processTurnOff(pluginAction, dev, actionUi)
 
     def _processBrightnessSet(self, pluginAction, dev, newBrightness):  # Dev is a nanoleaf device
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
         if newBrightness > 0:
             if newBrightness > dev.brightness:
                 actionUi = 'brighten'
             else:
                 actionUi = 'dim'  
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'BRIGHTNESS', [dev.id, newBrightness]])
-            self.generalLogger.info(u'sent \'{}\' {} to {}'.format(dev.name, actionUi, newBrightness))
+            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_BRIGHTNESS, [dev.id, newBrightness]])
+            self.logger.info(u'sent \'{}\' {} to {}'.format(dev.name, actionUi, newBrightness))
         else:
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'OFF', [dev.id]])
-            self.generalLogger.info(u'sent \'{}\' {}'.format(dev.name, 'dim to off'))
-
+            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_OFF, [dev.id]])
+            self.logger.info(u'sent \'{}\' {}'.format(dev.name, 'dim to off'))
 
     def _processSetColorLevels(self, action, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
-
         try:
-            self.generalLogger.debug(u'processSetColorLevels ACTION:\n{}'.format(action))
+            self.logger.debug(u'processSetColorLevels ACTION:\n{}'.format(action))
 
             # Determine Color / White Mode
             colorMode = False
@@ -812,9 +815,9 @@ class Plugin(indigo.PluginBase):
                     elif whiteTemperature > 6500:
                         whiteTemperature = 6500
 
-                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'WHITE', [dev.id, whiteLevel, whiteTemperature]])
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_WHITE, [dev.id, whiteLevel, whiteTemperature]])
 
-                self.generalLogger.info(u'sent \'{}\' set White Level to \'{}\' and White Temperature to \'{}\''.format(dev.name, int(whiteLevel), whiteTemperature))
+                self.logger.info(u'sent \'{}\' set White Level to \'{}\' and White Temperature to \'{}\''.format(dev.name, int(whiteLevel), whiteTemperature))
 
             else:
                 # As neither of 'whiteTemperature' or 'whiteTemperature' are set - assume mode is Colour
@@ -832,45 +835,43 @@ class Plugin(indigo.PluginBase):
                     if 'blueLevel' in action.actionValue:
                         blueLevel = float(action.actionValue['blueLevel'])
 
-                    self.generalLogger.debug(u'Color: \'{}\' R, G, B: {}, {}, {}'.format(dev.name, redLevel, greenLevel, blueLevel))
+                    self.logger.debug(u'Color: \'{}\' R, G, B: {}, {}, {}'.format(dev.name, redLevel, greenLevel, blueLevel))
 
-                    self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_COMMAND, 'COLOR', [dev.id, redLevel, greenLevel, blueLevel]])
+                    self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_COLOR, [dev.id, redLevel, greenLevel, blueLevel]])
 
-                    self.generalLogger.info(u'sent \'{}\' set Color Level to red \'{}\', green \'{}\' and blue \'{}\''.format(dev.name, int(round(redLevel)), int(round(greenLevel)), int(round(blueLevel))))
+                    self.logger.info(u'sent \'{}\' set Color Level to red \'{}\', green \'{}\' and blue \'{}\''.format(dev.name, int(round(redLevel)), int(round(greenLevel)), int(round(blueLevel))))
                 else:
-                    self.generalLogger.info(u'Failed to send \'{}\' set Color Level as device does not support color.'.format(dev.name))
+                    self.logger.info(u'Failed to send \'{}\' set Color Level as device does not support color.'.format(dev.name))
 
-
-        except StandardError, e:
-            self.generalLogger.error(u'StandardError detected during processSetColorLevels. Line \'{}\' has error = \'{}\''.format(sys.exc_traceback.tb_lineno, e))
-
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def processDiscoverDevices(self, pluginAction):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
-            
-        self.globals['queues']['discovery'].put([QUEUE_PRIORITY_LOW, 'DISCOVERY', []])
+
+        self.globals[QUEUES][DISCOVERY].put([QUEUE_PRIORITY_LOW, COMMAND_DISCOVERY, []])
 
     def processSetEffect(self, pluginAction, dev):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
-
-        if dev.states['connected'] == False or self.globals['nl'][dev.id]['started'] == False:
-            self.generalLogger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(pluginAction.description, dev.name))
-            return
-
-        effect = pluginAction.props.get('effectList')
-
-        if effect in self.globals['nl'][dev.id]['effectsList']:
-            self.generalLogger.info(u'sent \'{}\' Set Effect to {}'.format(dev.name, effect))
-            self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_LOW, 'SETEFFECT', [dev.id, effect]])
-        else:
-            self.generalLogger.info('Effect \'{}\' not available on nanoleaf device \'{}\''.format(effect, dev.name)) 
+        try:      
+            if dev.states['connected'] == False or self.globals[NL][dev.id][STARTED] == False:
+                self.logger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(pluginAction.description, dev.name))
+                return
+    
+            effect = pluginAction.props.get('effectList')
+    
+            if effect in self.globals[NL][dev.id][EFFECTS_LIST]:
+                self.logger.info(u'sent \'{}\' Set Effect to {}'.format(dev.name, effect))
+                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_LOW, COMMAND_SET_EFFECT, [dev.id, effect]])
+            else:
+                self.logger.info('Effect \'{}\' not available on nanoleaf device \'{}\''.format(effect, dev.name))
+        
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def authoriseNanoleaf(self, valuesDict, typeId, devId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'deviceConfigAuthoriseButtonPressed: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
+        self.logger.debug(f"deviceConfigAuthoriseButtonPressed: typeId[{typeId}], devId[{devId}], valuesDict = {valuesDict}")
 
-        ipAddress = valuesDict['ipAddress']
+        ipAddress = valuesDict["ipAddress"]
 
         try:
             socket.inet_aton(ipAddress)
@@ -882,32 +883,26 @@ class Plugin(indigo.PluginBase):
             errorDict["showAlertText"] = "IP Address is invalid! Select Nanoleaf device before attempting to authorise."
             return (valuesDict, errorDict)
 
-        rc, statusMessage, authToken = generate_auth_token(ipAddress)
-
-        if rc:
-            valuesDict['authToken'] = authToken
-            self.generalLogger.debug(u'generate_auth_token: rc[{}], statusMessage[{}], authToken = {}'.format(rc, statusMessage, authToken))
-        else:
-            self.generalLogger.error(u'{}'.format(statusMessage))
-
+        try:
+            self.globals[NL][devId][NANOLEAF_OBJECT] = Nanoleaf(ipAddress)
+        except NanoleafRegistrationError as statusMessage:
+            self.logger.error(u'{}'.format(statusMessage))
             errorDict = indigo.Dict()
             errorDict["authorise"] = 'Access Forbidden to nanoleaf device!'
             errorDict["showAlertText"] = 'Access Forbidden to nanoleaf device! Press and hold the power button for 5-7 seconds first! (Light will begin flashing)'
             return (valuesDict, errorDict)
+        else:
+            valuesDict["authToken"] = self.globals[NL][devId][NANOLEAF_OBJECT].auth_token  # noqa - self.globals[NL][devId][NANOLEAF_OBJECT] is a Nanoleaf object NOT a text string
 
         return valuesDict
 
-
-
     def updateIpAddress(self, valuesDict, typeId, devId):
-        self.methodTracer.threaddebug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'actionConfigPresetUpdateButtonPressed: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
+        self.logger.debug(f'actionConfigPresetUpdateButtonPressed: typeId[{typeId}], devId[{devId}], valuesDict = {valuesDict}')
 
-
-        if 'address' in valuesDict and valuesDict['address'] != '':
-            nlInfo = self.globals['discovery']['discoveredDevices'][valuesDict['address']]
-            valuesDict['ipAddress'] = nlInfo[0]  # from tuple of (IP Address, MAC Address)
+        if 'address' in valuesDict and valuesDict["address"] != '':
+            nlInfo = self.globals[DISCOVERY][DISCOVERED_DEVICES][valuesDict["address"]]
+            valuesDict["ipAddress"] = nlInfo[0]  # from tuple of (IP Address, MAC Address)
             return valuesDict
         else:
             errorDict = indigo.Dict()
@@ -915,35 +910,31 @@ class Plugin(indigo.PluginBase):
             errorDict["showAlertText"] = "Unable to update IP Address as nanoleaf Device ID not set"
             return (valuesDict, errorDict)
 
-        return valuesDict
-
     def nanoleafAvailableDeviceSelected(self, valuesDict, typeId, devId):
 
         try:
-            self.generalLogger.debug(u'nanoleafAvailableDeviceSelected: typeId[{}], devId[{}], valuesDict = {}'.format(typeId, devId, valuesDict))
+            self.logger.debug(f'nanoleafAvailableDeviceSelected: typeId[{typeId}], devId[{devId}], valuesDict = {valuesDict}')
 
-            if valuesDict['nanoleafDevice'] != 'SELECT_AVAILABLE':
-                nlDeviceid, nlMacAddress, ipAddress, nlName = valuesDict['nanoleafDevice'].split('*')
-                valuesDict['nanoleafDeviceId'] = nlDeviceid
-                valuesDict['macAddress'] = nlMacAddress
-                valuesDict['ipAddress'] = ipAddress
+            if valuesDict["nanoleafDevice"] != "SELECT_AVAILABLE":
+                nanoleafDeviceId, macAddress, ipAddress, nlName = valuesDict["nanoleafDevice"].split('*')
+                valuesDict["nanoleafDeviceId"] = nanoleafDeviceId
+                valuesDict["macAddress"] = macAddress
+                valuesDict["ipAddress"] = ipAddress
 
             return valuesDict
 
-        except StandardError, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u'nanoleafAvailableDeviceSelected: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[devId].name, exc_tb.tb_lineno,  e))   
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def _buildAvailableDevicesList(self, filter="", valuesDict=None, typeId="", targetId=0):
-        self.methodTracer.debug(u"CLASS: Plugin")
 
-        self.generalLogger.debug(u'_buildAvailableDevicesList: TARGET ID = \'{}\''.format(targetId))
+        self.logger.debug(u'_buildAvailableDevicesList: TARGET ID = \'{}\''.format(targetId))
 
         try:
             available_dict = []
             available_dict.append(("SELECT_AVAILABLE", "- Select nanoleaf device -"))
 
-            for nlDeviceid, nlInfo in self.globals['discovery']['discoveredUnmatchedDevices'].iteritems():  # self.globals['discovery']['discoveredDevices']
+            for nlDeviceid, nlInfo in self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES].items():  # self.globals[DISCOVERY][DISCOVERED_DEVICES]
                 nlIpAddress = nlInfo[0]
                 nlMacAddress = nlInfo[1]
                 nlName = nlInfo[2]
@@ -956,21 +947,19 @@ class Plugin(indigo.PluginBase):
             myArray = available_dict
             return myArray
 
-        except StandardError, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u'_buildAvailableDevicesList: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[targetId].name, exc_tb.tb_lineno,  e))   
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def _buildAvailableEffectsList(self, filter="", valuesDict=None, typeId="", targetId=0):
-        self.methodTracer.debug(u"CLASS: Plugin")
 
-        self.generalLogger.debug('_buildAvailableEffectsList: TARGET ID = {}'.format(targetId))
+        self.logger.debug(f'_buildAvailableEffectsList: TARGET ID = {targetId}')
         try:
             nanoleafDevId = targetId
 
             effect_dict = []
             effect_dict.append(("SELECT_EFFECT", "- Select nanoleaf effect -"))
 
-            for effect in self.globals['nl'][nanoleafDevId]['effectsList']:
+            for effect in self.globals[NL][nanoleafDevId][EFFECTS_LIST]:
                 nanoleaf_effect = (effect, effect)
                 effect_dict.append(nanoleaf_effect)
             if len(effect_dict) == 1:
@@ -980,13 +969,11 @@ class Plugin(indigo.PluginBase):
             myArray = effect_dict
             return myArray
 
-        except StandardError, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            self.generalLogger.error(u'_buildAvailableEffectsList: StandardError detected for \'{}\' at line \'{}\' = {}'.format(indigo.devices[targetId].name, exc_tb.tb_lineno,  e))   
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def refreshEffectList(self, valuesDict, typeId, devId):
-        self.methodTracer.debug(u"CLASS: Plugin")
-        
-        self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [devId]])
+
+        self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [devId]])
 
         self.sleep(3)  # Allow 3 seconds for the list to be refreshed

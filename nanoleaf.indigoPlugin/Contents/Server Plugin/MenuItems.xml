@@ -1,3 +1,7 @@
 <?xml version="1.0"?>
 <MenuItems>
+	<MenuItem id="pluginInformation">
+		<Name>Display Plugin Information</Name>
+        <CallbackMethod>display_plugin_information</CallbackMethod>
+    </MenuItem>
 </MenuItems>

@@ -1,21 +1,23 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017-2020
+# nanoleaf Controller © Autolog 2017-2022
 #
 
 try:
     import indigo
 except:
     pass
-import logging
-import Queue
+
+# import colorsys
+import queue
+import sys
 import threading
 import traceback
 
 from constants import *
-from nanoleaf.nanoleaf import *
-from nanoleaf.discover_nanoleaf import *
+from nanoleafapi.nanoleaf import *
+# from nanoleafapi.discovery import *
 
 class ThreadSendReceiveMessages(threading.Thread):
 
@@ -32,292 +34,299 @@ class ThreadSendReceiveMessages(threading.Thread):
 
         self.globals = globals[0]
 
-        self.sendReceiveMonitorLogger = logging.getLogger('Plugin.MonitorSendReceive')
-        self.sendReceiveMonitorLogger.setLevel(self.globals['debug']['monitorSendReceive'])
+        self.sendReceiveLogger = logging.getLogger("Plugin.SendReceive")
 
-        self.sendReceiveDebugLogger = logging.getLogger('Plugin.DebugSendReceive')
-        self.sendReceiveDebugLogger.setLevel(self.globals['debug']['debugSendReceive'])
+        self.sendReceiveLogger.debug("Initialising nanoleaf Send and Receive Message Thread")
 
-        self.methodTracer = logging.getLogger('Plugin.method')  
-        self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
-
-        self.sendReceiveDebugLogger.debug(u'Initialising nanoleaf Send and Receive Message Thread')  
+    def exception_handler(self, exception_error_message, log_failing_statement):
+        filename, line_number, method, statement = traceback.extract_tb(sys.exc_info()[2])[-1]
+        module = filename.split('/')
+        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method}'"
+        if log_failing_statement:
+            log_message = log_message + f"\n   Failing statement [line {line_number}]: '{statement}'"
+        else:
+            log_message = log_message + f" at line {line_number}"
+        self.sendReceiveLogger.error(log_message)
 
     def run(self):
-        self.methodTracer.threaddebug(u'ThreadSendReceiveMessages')
- 
         try:
-            self.sendReceiveDebugLogger.debug(u'nanoleaf Send Receive Message Thread initialised.')    
+            self.sendReceiveLogger.debug("nanoleaf Send Receive Message Thread initialised.")
 
             while True:
 
                 try:
-                    nanoleafQueuedPriorityCommandData = self.globals['queues']['messageToSend'].get(True,5)
+                    nanoleaf_queued_priority_command_data = self.globals[QUEUES][MESSAGE_TO_SEND].get(True,5)
 
-                    self.sendReceiveDebugLogger.debug(u'NANOLEAF QUEUED PRIORITY COMMAND DATA: {}'.format(nanoleafQueuedPriorityCommandData))    
-                    nanoleafQueuePriority, nanoleafCommand, nanoleafCommandParameters = nanoleafQueuedPriorityCommandData
+                    self.sendReceiveLogger.debug(f"NANOLEAF QUEUED PRIORITY COMMAND DATA: {nanoleaf_queued_priority_command_data}")
+                    nanoleaf_queue_priority, nanoleaf_command, nanoleaf_command_parameters = nanoleaf_queued_priority_command_data
 
-                    # Check if monitoring / debug options have changed and if so set accordingly
-                    if self.globals['debug']['previousMonitorSendReceive'] != self.globals['debug']['monitorSendReceive']:
-                        self.globals['debug']['previousMonitorSendReceive'] = self.globals['debug']['monitorSendReceive']
-                        self.sendReceiveMonitorLogger.setLevel(self.globals['debug']['monitorSendReceive'])
-                    if self.globals['debug']['previousDebugSendReceive'] != self.globals['debug']['debugSendReceive']:
-                        self.globals['debug']['previousDebugSendReceive'] = self.globals['debug']['debugSendReceive']
-                        self.sendReceiveDebugLogger.setLevel(self.globals['debug']['debugSendReceive'])
-                    if self.globals['debug']['previousDebugMethodTrace'] !=self.globals['debug']['debugMethodTrace']:
-                        self.globals['debug']['previousDebugMethodTrace'] = self.globals['debug']['debugMethodTrace']
-                        self.methodTracer.setLevel(self.globals['debug']['debugMethodTrace'])
-
-                    self.sendReceiveDebugLogger.debug(u'Dequeued Send Message to process [NANOLEAFCOMMAND]: {}'.format(nanoleafCommand))
+                    self.sendReceiveLogger.debug(f"Dequeued Send Message to process [NANOLEAFCOMMAND]: {nanoleaf_command}")
 
                     # Handle commands to all NANOLEAF lamps
 
-                    if nanoleafCommand == 'STOPTHREAD':
+                    if nanoleaf_command == STOP_THREAD:
                         break  # Exit While loop and quit thread
 
-
-                    if nanoleafCommand == 'STATUSPOLLING':
-                        for nanoleafDevId in self.globals['nl']:
-                            if self.globals['nl'][nanoleafDevId]["started"] == True:
-                                self.sendReceiveDebugLogger.debug(u'Processing {} for {}'.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_MEDIUM, 'STATUS', [nanoleafDevId]])
+                    if nanoleaf_command == STATUS_POLLING:
+                        for nanoleafDevId in self.globals[NL]:
+                            if self.globals[NL][nanoleafDevId][STARTED]:
+                                self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for {indigo.devices[nanoleafDevId].name}")
+                                self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_MEDIUM, COMMAND_STATUS, [nanoleafDevId]])
                                  
                         continue  
 
-                    if nanoleafCommand == 'STATUS':
-                        nanoleafDevId = nanoleafCommandParameters[0]
+                    if nanoleaf_command == COMMAND_STATUS:
+                        nanoleafDevId = nanoleaf_command_parameters[0]
                         nanoleafDev   = indigo.devices[nanoleafDevId]
 
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
+                        if self.globals[NL][nanoleafDevId][STARTED] == True:
                             
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\''.format(nanoleafCommand, nanoleafDev.name))
-                            ipAddress = self.globals['nl'][nanoleafDevId]["ipAddress"]
-                            authToken = self.globals['nl'][nanoleafDevId]["authToken"]
-                            self.globals['nl'][nanoleafDevId]["nanoleaf"] = Nanoleaf(ipAddress, authToken)  # May move this to discovery process?
-                            self.sendReceiveDebugLogger.debug(u'STATUS DEBUG: Type = {}, Data1= {}'.format(type(self.globals['nl'][nanoleafDevId]["nanoleaf"]), self.globals['nl'][nanoleafDevId]["nanoleaf"]))
-
-                            success, statusMsg, self.globals['nl'][nanoleafDevId]["nanoleafInfo"] = self.globals['nl'][nanoleafDevId]["nanoleaf"].info
-                            self.sendReceiveDebugLogger.debug(u'STATUS DEBUG: Success = {}, StatusMsg = {}'.format(success, statusMsg))
-                            self.sendReceiveDebugLogger.debug(u'STATUS DEBUG: Type = {}, Data2= {}'.format(type(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]), self.globals['nl'][nanoleafDevId]["nanoleafInfo"]))
-
-                            if success:
-                                self.updateDeviceState(nanoleafDevId)
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem retrieving status for device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-
-
-                        continue
-
-                    if (nanoleafCommand == 'ON') or (nanoleafCommand == 'OFF'):
-                        nanoleafDevId = nanoleafCommandParameters[0]
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\' '.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-
-                            if nanoleafCommand == 'ON':
-                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_on()
-                            else:  # nanoleafCommand == 'OFF'
-                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_off()
-
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem turning {} the device \'{}\': {}'.format(nanoleafCommand, nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-
-                        continue
-
-                    if (nanoleafCommand == 'BRIGHTNESS'):
-                        nanoleafDevId = nanoleafCommandParameters[0]
-
-                        targetBrightness = nanoleafCommandParameters[1]
-
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\' '.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_brightness(targetBrightness)
-
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem setting brightness of device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-                        
-                        continue
-
-                    if nanoleafCommand == 'DIM':
-                        nanoleafDevId = nanoleafCommandParameters[0]
-
-                        targetDimBy = nanoleafCommandParameters[1]
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\' '.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].brightness_lower(targetDimBy)
-
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem dimming the device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-
-                        continue
-
-                    if nanoleafCommand == 'BRIGHTEN':
-                        nanoleafDevId = nanoleafCommandParameters[0]
-
-                        targetBrightenBy = nanoleafCommandParameters[1]
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\' '.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].brightness_raise(targetBrightenBy)
-
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem brightening the device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-
-                        continue
-
-                    if nanoleafCommand == 'WHITE':
-                        nanoleafDevId, targetWhiteLevel, targetWhiteTemperature = nanoleafCommandParameters
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-                            nanoleafDev = indigo.devices[nanoleafDevId]
-
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_color_temperature(int(targetWhiteTemperature))
-
-                            if success:
-                                success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_brightness(int(targetWhiteLevel))
-                                if success:
-                                    self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{nanoleafDev.name}'")
+                            ip_address = self.globals[NL][nanoleafDevId][IP_ADDRESS]
+                            auth_token = self.globals[NL][nanoleafDevId][AUTH_TOKEN]
+                            try:
+                                self.globals[NL][nanoleafDevId][CONNECTION_RETRIES] += 1
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT] = Nanoleaf(ip_address, auth_token)  # May move this to discovery process?
+                                if self.globals[NL][nanoleafDevId][CONNECTION_RETRIES] > 1:
+                                    self.sendReceiveLogger.warning(f"Connection re-established with '{nanoleafDev.name}'.")
+                                self.globals[NL][nanoleafDevId][CONNECTION_RETRIES] = 0
+                            except Exception as exception_error:
+                                retries_so_far = self.globals[NL][nanoleafDevId][CONNECTION_RETRIES]
+                                if retries_so_far < CONNECTION_RETRY_LIMIT:
+                                    if retries_so_far == 1:
+                                        self.sendReceiveLogger.warning(f"Problem connecting to '{nanoleafDev.name}'. Commencing retries . . .")
+                                    else:
+                                        self.sendReceiveLogger.warning(f"Problem connecting to '{nanoleafDev.name}'. Retry {retries_so_far} failed. Retrying . . .")
+                                    self.sendReceiveLogger.debug(f"Problem connecting to '{nanoleafDev.name}': {exception_error}")
                                 else:
-                                    self.sendReceiveDebugLogger.error(u'Problem setting white level for device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                    self.communicationProblem(nanoleafDev) 
+                                    if retries_so_far == CONNECTION_RETRY_LIMIT:
+                                        self.sendReceiveLogger.error(f"Problem connecting to '{nanoleafDev.name}'. Reporting Retry limit reached and so will continue retrying in the background.")
+                                self.communicationProblem(nanoleafDev)
+                                continue
 
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem setting white temperature for device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
+                            self.sendReceiveLogger.debug(f"STATUS DEBUG: Type = {type(self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT])}, Data1= {self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT]}")
+
+                            # self.sendReceiveLogger.warning(f"NANOLEAF GET INFO:\n {self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].get_info()}\n")  # NEW LIBRARY
+
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_INFO] = self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].get_info()  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem getting status of '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.updateDeviceState(nanoleafDevId)
 
                         continue
 
+                    if (nanoleaf_command == COMMAND_ON) or (nanoleaf_command == COMMAND_OFF):
+                        nanoleafDevId = nanoleaf_command_parameters[0]
+                        nanoleafDev = indigo.devices[nanoleafDevId]
 
-                    if nanoleafCommand == 'COLOR':
-                        nanoleafDevId, targetRedLevel, targetGreenLevel, targetBlueLevel = nanoleafCommandParameters
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{indigo.devices[nanoleafDevId].name}' ")
 
-                        self.sendReceiveDebugLogger.debug(u'NANOLEAF COMMAND [COLOR]; Target for {}: Red={}, Green={}, Blue={}'.format(indigo.devices[nanoleafDevId].name,  targetRedLevel, targetGreenLevel, targetBlueLevel))   
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-                            nanoleafDev = indigo.devices[nanoleafDevId]
+                            try:
+                                if nanoleaf_command == COMMAND_ON:
+                                    self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].power_on()  # NEW LIBRARY
+                                else:  # nanoleafCommand == COMMAND_OFF
+                                    self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].power_off()  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem turning {nanoleaf_command} the device '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
 
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+
+                        continue
+
+                    if nanoleaf_command == COMMAND_BRIGHTNESS:
+                        nanoleafDevId = nanoleaf_command_parameters[0]
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        targetBrightness = nanoleaf_command_parameters[1]
+
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{indigo.devices[nanoleafDevId].name}'")
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_brightness(targetBrightness)  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem setting brightness of '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+                        continue
+
+                    if nanoleaf_command == COMMAND_DIM:
+                        nanoleafDevId = nanoleaf_command_parameters[0]
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        targetDimBy = nanoleaf_command_parameters[1]
+
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{indigo.devices[nanoleafDevId].name}'")
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_brightness(targetDimBy)  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem dimming '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+                        continue
+
+                    if nanoleaf_command == COMMAND_BRIGHTEN:
+                        nanoleafDevId = nanoleaf_command_parameters[0]
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        targetBrightenBy = nanoleaf_command_parameters[1]
+
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{indigo.devices[nanoleafDevId].name}'")
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_brightness(targetBrightenBy)  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem brightening '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+                        continue
+
+                    if nanoleaf_command == COMMAND_WHITE:
+                        nanoleafDevId, targetWhiteLevel, targetWhiteTemperature = nanoleaf_command_parameters
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_color_temp(int(targetWhiteTemperature))  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem setting white temperature for '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_brightness(int(targetWhiteLevel))  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem setting white temperature brightness for '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+
+                        continue
+
+                    if nanoleaf_command == COMMAND_COLOR:
+                        nanoleafDevId, targetRedLevel, targetGreenLevel, targetBlueLevel = nanoleaf_command_parameters
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        self.sendReceiveLogger.debug(f"NANOLEAF COMMAND [COLOR]; Target for {indigo.devices[nanoleafDevId].name}: Red={targetRedLevel}, Green={targetGreenLevel}, Blue={targetBlueLevel}")
+                        if self.globals[NL][nanoleafDevId][STARTED]:
                             red = int((targetRedLevel*255.0)/100.0)
                             green = int((targetGreenLevel*255.0)/100.0)
                             blue = int((targetBlueLevel*255.0)/100.0)
 
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_rgb([red, green, blue])
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_color([red, green, blue])  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem setting color for '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
 
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem setting the color on the device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
-
-                        continue
-
-
-                    if nanoleafCommand == 'SETEFFECT':
-                        nanoleafDevId = nanoleafCommandParameters[0]
-
-                        effect = nanoleafCommandParameters[1]
-
-                        if self.globals['nl'][nanoleafDevId]["started"] == True:
-
-                            self.sendReceiveDebugLogger.debug(u'Processing {} for \'{}\' '.format(nanoleafCommand, indigo.devices[nanoleafDevId].name))
-
-                            nanoleafDev = indigo.devices[nanoleafDevId]
-
-                            success, statusMsg, reply = self.globals['nl'][nanoleafDevId]["nanoleaf"].set_effect(effect)
-
-                            if success:
-                                self.globals['queues']['messageToSend'].put([QUEUE_PRIORITY_STATUS_HIGH, 'STATUS', [nanoleafDevId]])
-                            else:
-                                self.sendReceiveDebugLogger.error(u'Problem setting the effect on the device \'{}\': {}'.format(nanoleafDev.name, statusMsg))
-                                self.communicationProblem(nanoleafDev) 
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
 
                         continue
 
-                except Queue.Empty:
+                    if nanoleaf_command == COMMAND_SET_EFFECT:
+                        nanoleafDevId = nanoleaf_command_parameters[0]
+                        nanoleafDev = indigo.devices[nanoleafDevId]
+
+                        effect = nanoleaf_command_parameters[1]
+
+                        if self.globals[NL][nanoleafDevId][STARTED]:
+                            self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{indigo.devices[nanoleafDevId].name}' ")
+
+                            try:
+                                self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].set_effect(effect)  # NEW LIBRARY
+                            except Exception as exception_error:
+                                self.sendReceiveLogger.error(f"Problem setting the effect for '{nanoleafDev.name}': {exception_error}")
+                                self.communicationProblem(nanoleafDev)
+                                continue
+
+                            self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_STATUS_HIGH, COMMAND_STATUS, [nanoleafDevId]])
+
+                        continue
+
+                except queue.Empty:
                     pass
-                # except StandardError, e:
-                #     self.sendReceiveDebugLogger.error(u'StandardError detected communicating with nanoleaf device. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
-                except StandardError, e:
-                    self.sendReceiveDebugLogger.error(u'StandardError detected communicating with NANOLEAF lamp:') 
-                    errorLines = traceback.format_exc().splitlines()
-                    for errorLine in errorLines:
-                        self.sendReceiveDebugLogger.error(u'{}'.format(errorLine))   
+                except Exception as exception_error:
+                    self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-        except StandardError, e:
-            self.sendReceiveDebugLogger.error(u'StandardError detected in NANOLEAF Send Receive Message Thread. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-        self.sendReceiveDebugLogger.debug(u'NANOLEAF Send Receive Message Thread ended.')   
+        self.sendReceiveLogger.debug("NANOLEAF Send Receive Message Thread ended.")
 
     def communicationProblem(self, argNanoleafDev):
-        if argNanoleafDev.states['connected'] == True:
-            argNanoleafDev.updateStateOnServer(key='connected', value=False)
-            argNanoleafDev.setErrorStateOnServer(u'no ack')
-            self.sendReceiveMonitorLogger.error(u'Communication lost with \"{}\" - status set to \'No Acknowledgment\' (no ack)'.format(argNanoleafDev.name))  
+        if argNanoleafDev.states["connected"]:
+            argNanoleafDev.updateStateOnServer(key="connected", value=False)
+            argNanoleafDev.setErrorStateOnServer("no ack")
+            self.sendReceiveLogger.error(f"Communication lost with \"{argNanoleafDev.name}\" - status set to 'No Acknowledgment' (no ack)")
 
     def updateDeviceState(self, nanoleafDevId):
-        self.methodTracer.threaddebug(u'ThreadHandleMessages')
-
         try:
             nanoleafDev = indigo.devices[nanoleafDevId]
 
-            self.globals['nl'][nanoleafDevId]['lastResponseToPollCount'] = self.globals['polling']['count']  # Set the current poll count (for 'no ack' check)
+            self.globals[NL][nanoleafDevId][LAST_RESPONSE_TO_POLL_COUNT] = self.globals[POLLING][COUNT]  # Set the current poll count (for 'no ack' check)
 
-            if str(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['on']['value']) == 'True':
-                onState = True
-                onOffState = 'on'
-            else:
-                onState = False
-                onOffState = 'off'
+            # if str(self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["on"]["value"]) == "True":  # TODO: Check this
+            #     onState = True
+            #     onOffState = 'on'
+            # else:
+            #     onState = False
+            #     onOffState = 'off'
 
-            colorMode = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['colorMode']
+            onState = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["on"]["value"]  # TODO: Check this is OK
+            onOffState = "on" if onState else "off"
 
-            hue = int(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['hue']['value'])
-            saturation = int(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['sat']['value'])
-            brightness = int(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['brightness']['value'])
-            if not onState:
-                brightnessLevel = 0
-            else:
-                brightnessLevel = brightness
-            colorTemperature = int(self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['state']['ct']['value'])
+            colorMode = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["colorMode"]
 
-            success, statusMsg, rgb = self.globals['nl'][nanoleafDevId]["nanoleaf"].rgb
-            if not success:
-                self.sendReceiveMonitorLogger.error(u'Status not updated for \'{}\': RGB conversion for device update with error \'{}\''.format(nanoleafDev.name, statusMsg))
-                return  
+            hue = int(self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["hue"]["value"])
+            saturation = int(self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["sat"]["value"])
+            brightness = int(self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["brightness"]["value"])
 
-            red, green, blue = [int((rgb[0] * 100)/255), int((rgb[1] * 100)/255), int((rgb[2] * 100)/255)]
+            brightnessLevel = brightness if onState else 0
 
-            self.globals['nl'][nanoleafDevId]['effectsList'] = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['effects']['effectsList']
+            colorTemperature = int(self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["state"]["ct"]["value"])
 
-            effect = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['effects']['select']
+            hsv_hue = float(hue) / 360.0
+            hsv_value = float(brightness) / 100.0
+            hsv_saturation = float(saturation) / 100.0
+            red, green, blue = colorsys.hsv_to_rgb(hsv_hue, hsv_saturation, hsv_value)
 
-            serialNo = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['serialNo']
-            model = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['model']
-            manufacturer = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['manufacturer']
-            name = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['name']
-            firmwareVersion = self.globals['nl'][nanoleafDevId]["nanoleafInfo"]['firmwareVersion']
+            # success, status_msg, rgb = self.globals[NL][nanoleafDevId][NANOLEAF_OBJECT].rgb
+            # if not success:
+            #     self.sendReceiveLogger.error(f"Status not updated for '{nanoleafDev.name}': RGB conversion for device update with error '{status_msg}'")
+            #     return
+            #
+            # red, green, blue = [int((rgb[0] * 100)/255), int((rgb[1] * 100)/255), int((rgb[2] * 100)/255)]
+
+            red = int(red * 100.0)
+            green = int(green * 100.0)
+            blue = int(blue * 100.0)
+
+            self.globals[NL][nanoleafDevId][EFFECTS_LIST] = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["effects"]["effectsList"]
+
+            effect = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["effects"]["select"]
+
+            serialNo = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["serialNo"]
+            model = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["model"]
+            manufacturer = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["manufacturer"]
+            name = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["name"]
+            firmwareVersion = self.globals[NL][nanoleafDevId][NANOLEAF_INFO]["firmwareVersion"]
 
             keyValueList = [
-                {'key': 'connected', 'value': True},
+                {'key': "connected", 'value': True},
                 {'key': 'nanoleafOnState', 'value': onState},
                 {'key': 'nanoleafOnOffState', 'value': onOffState},
 
@@ -347,7 +356,7 @@ class ThreadSendReceiveMessages(threading.Thread):
             nanoleafDev.updateStateImageOnServer(indigo.kStateImageSel.Auto)
 
             props = nanoleafDev.pluginProps
-            if 'version' in props and str(props['version']) == firmwareVersion:
+            if "version" in props and str(props["version"]) == firmwareVersion:
                 pass
             else:
                 props["version"] = str(firmwareVersion)
@@ -357,8 +366,7 @@ class ThreadSendReceiveMessages(threading.Thread):
                 nanoleafDev.model = str(model)
                 nanoleafDev.replaceOnServer()
 
-            self.globals['nl'][nanoleafDevId]['lastResponseToPollCount'] = self.globals['polling']['count']  # Set the current poll count (for 'no ack' check)
+            self.globals[NL][nanoleafDevId][LAST_RESPONSE_TO_POLL_COUNT] = self.globals[POLLING][COUNT]  # Set the current poll count (for 'no ack' check)
  
-        except StandardError, e:
-            self.sendReceiveDebugLogger.error(u'StandardError detected in \'updateDeviceState\'. Line \'{}\' has error=\'{}\''.format(sys.exc_traceback.tb_lineno, e))   
-
+        except Exception as exception_error:
+            self.exception_handler(exception_error, True)  # Log error and display failing statement
