@@ -347,7 +347,8 @@ class ThreadSendReceiveMessages(threading.Thread):
 
                 {'key': 'name', 'value': name},
                 {'key': 'manufacturer', 'value': manufacturer},
-                {'key': 'serialNo', 'value': serialNo}
+                {'key': 'serialNo', 'value': serialNo},
+                {'key': 'noAck', 'value': False}
 
             ]
 

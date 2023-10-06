@@ -69,6 +69,11 @@
                 <TriggerLabel>Connected</TriggerLabel>
                 <ControlPageLabel>Connected</ControlPageLabel>
             </State>
+            <State id="noAck">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>No Ack</TriggerLabel>
+                <ControlPageLabel>No Ack</ControlPageLabel>
+            </State>
            <State id="nanoleafDeviceId">
                 <ValueType>String</ValueType>
                 <TriggerLabel>Nanoleaf Device Id</TriggerLabel>
