@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <PluginConfig>
-    <SupportURL>http://www.yourdomain.com/plugin/ApplianceModule.html</SupportURL>
+    <SupportURL>https://forums.indigodomo.com/viewforum.php?f=247</SupportURL>
     <Field id="description" type="label">
-        <Label>This Plugin controls nanoleaf devices. 😄</Label>
+        <Label>This plugin controls nanoleaf devices. 😄</Label>
     </Field>
     <Field id="copyright" type="label">
-        <Label>Copyright © 2017-2020 Autolog</Label>
+        <Label>Copyright © 2017-2023 Autolog</Label>
     </Field>
 
     <Field id="separator-1" type="separator" visibleBindingValue="true"/>

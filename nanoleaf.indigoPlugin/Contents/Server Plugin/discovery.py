@@ -1,22 +1,22 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller - Main © Autolog 2017-2021
+# nanoleaf Controller © Autolog 2017-2024
 #
 
 try:
     import indigo
-except:
+except ImportError:
     pass
 
-import logging
+
 import queue
 import sys
 import threading
 import traceback
 
 from constants import *
-from nanoleafapi.discover_nanoleaf import *
+from nanoleafapi.discover_nanoleaf import discover_nanoleafs
 
 
 class ThreadDiscovery(threading.Thread):

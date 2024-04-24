@@ -1,19 +1,19 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller © Autolog 2017-2022
+# nanoleaf Controller © Autolog 2017-2024
 #
 
 try:
     import indigo
-except:
+except ImportError:
     pass
-import logging
 import sys
 import threading
 import traceback
 
 from constants import *
+
 
 class ThreadPolling(threading.Thread):
 

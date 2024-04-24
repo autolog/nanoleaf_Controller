@@ -1,24 +1,24 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller © Autolog 2017-2022
+# nanoleaf Controller © Autolog 2017-2024
 #
 
 try:
     import indigo
-except:
+except ImportError:
     pass
-import logging
-import platform
 
+import os
+import platform
 import queue
+import socket
 import sys
 import threading
 import traceback
 
 from constants import *
-from nanoleafapi.nanoleaf import *
-from nanoleafapi.discover_nanoleaf import *
+from nanoleafapi.nanoleaf import Nanoleaf, NanoleafRegistrationError
 from polling import ThreadPolling
 from sendReceiveMessages import ThreadSendReceiveMessages
 from discovery import ThreadDiscovery
@@ -53,7 +53,7 @@ class Plugin(indigo.PluginBase):
 
         self.logger = logging.getLogger("Plugin.Hubitat")
 
-        # Now logging is set-up, output Initialising message
+        # Now logging is set up, output Initialising message
 
         # startup_message_ui = "\n"  # Start with a line break
         # startup_message_ui += f"{' Initialising Nanoleaf Controller Plugin ':={'^'}130}\n"
@@ -72,14 +72,14 @@ class Plugin(indigo.PluginBase):
         # self.logger.info(startup_message_ui)
 
         # Initialise dictionary to store internal details about nanoleaf devices
-        self.globals[NL]= dict()
+        self.globals[NL] = dict()
 
-        self.globals[THREADS]= dict()
-        self.globals[THREADS][SEND_RECEIVE_MESSAGES]= dict()
-        self.globals[THREADS][POLLING]= dict()
+        self.globals[THREADS] = dict()
+        self.globals[THREADS][SEND_RECEIVE_MESSAGES] = dict()
+        self.globals[THREADS][POLLING] = dict()
 
         # Initialise discovery dictionary to store discovered devices, discovery period
-        self.globals[DISCOVERY]= dict()
+        self.globals[DISCOVERY] = dict()
         self.globals[DISCOVERY][DISCOVERED_DEVICES] = dict()  # dict of nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
         self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES] = dict()  # dict of unmatched (no Indigo device) nanoleaf device ids (psuedo mac) and tuple of (IP Address and MAC Address)
         self.globals[DISCOVERY][PERIOD] = 30  # period of each active discovery
@@ -93,7 +93,7 @@ class Plugin(indigo.PluginBase):
         self.globals[QUEUES][INITIALISED] = False
 
         # Initialise dictionary for polling thread
-        self.globals[POLLING]= dict()
+        self.globals[POLLING] = dict()
         self.globals[POLLING][THREAD_ACTIVE] = False        
         self.globals[POLLING][STATUS] = False
         self.globals[POLLING][SECONDS] = float(300.0)  # 5 minutes
@@ -153,7 +153,7 @@ class Plugin(indigo.PluginBase):
 
         for dev in indigo.devices.iter("self"):
             self.logger.debug(f'nanoleaf Indigo Device: {dev.name} [{dev.states["ipAddress"]} = {dev.address}]')
-            self.globals[NL][dev.id]= dict()
+            self.globals[NL][dev.id] = dict()
             self.globals[NL][dev.id][STARTED]                  = False
             self.globals[NL][dev.id][INITIALISED_FROM_DEVICE]  = False
             self.globals[NL][dev.id][NL_DEVICE_PSEUDO_ADDRESS] = dev.address  # eg. 'd0:73:d5:0a:bc:de' (psuedo mac address)
@@ -204,7 +204,7 @@ class Plugin(indigo.PluginBase):
                         errorDict = indigo.Dict()
                         errorDict["overriddenHostIpAddress"] = "Host IP Address missing"
                         errorDict["showAlertText"] = "You have elected to override the Host Ip Address but haven't specified it!"
-                        return (False, valuesDict, errorDict)
+                        return False, valuesDict, errorDict
 
             if "statusPolling" in valuesDict:
                 self.globals[POLLING][STATUS] = bool(valuesDict["statusPolling"])
@@ -224,7 +224,7 @@ class Plugin(indigo.PluginBase):
                     errorDict = indigo.Dict()
                     errorDict["missedPollLimit"] = "Invalid number for missed polls limit"
                     errorDict["showAlertText"] = "The number of missed polls limit must be specified as an integer e.g 2, 5 etc."
-                    return (False, valuesDict, errorDict)
+                    return False, valuesDict, errorDict
             else:
                 self.globals[POLLING][MISSED_POLL_LIMIT] = int(2)  # Default to 2 missed polls
 
@@ -235,7 +235,7 @@ class Plugin(indigo.PluginBase):
                     errorDict = indigo.Dict()
                     errorDict["defaultDiscoveryPeriod"] = "Invalid number for seconds"
                     errorDict["showAlertText"] = "The number of seconds must be specified as an integer e.g. 10, 20 etc."
-                    return (False, valuesDict, errorDict)
+                    return False, valuesDict, errorDict
             else:
                 self.globals[DISCOVERY][PERIOD] = float(30.0)  # Default to 30 seconds  
 
@@ -274,8 +274,8 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(u'Host IP Address overridden and specified as: \'{}\''.format(valuesDict.get('overriddenHostIpAddress', 'INVALID ADDRESS')))
 
         # Following logic checks whether polling is required.
-        # If it isn't required, then it checks if a polling thread exists and if it does it ends it
-        # If it is required, then it checks if a pollling thread exists and 
+        # If polling isn't required, then it checks if a polling thread exists and if it does exist, it terminates the polling thread.
+        # If it is required, then it checks if a polling thread exists and
         #   if a polling thread doesn't exist it will create one as long as the start logic has completed and created a nanoleaf Command Queue.
         #   In the case where a nanoleaf command queue hasn't been created then it means 'Start' is yet to run and so 
         #   'Start' will create the polling thread. So this bit of logic is mainly used where polling has been turned off
@@ -330,7 +330,7 @@ class Plugin(indigo.PluginBase):
         self.globals['debug']['debugMethodTrace']   = logging.INFO  # For displaying method invocations i.e. trace method
         self.globals['debug']['debugPolling']       = logging.INFO  # For polling debugging
 
-        if self.globals['debug']['monitorDebugEnabled'] == False:
+        if self.globals['debug']['monitorDebugEnabled'] is False:
             self.plugin_file_handler.setLevel(logging.INFO)
         else:
             self.plugin_file_handler.setLevel(logging.THREADDEBUG)
@@ -414,7 +414,7 @@ class Plugin(indigo.PluginBase):
                 self.sleep(10)  # Allow startup to complete
 
             while True:
-                self.sleep(300) # 5 minutes in seconds
+                self.sleep(300)  # 5 minutes in seconds
 
         except self.StopThread:
             self.logger.info(u'{} Plugin shutdown requested'.format(PLUGIN_TITLE))
@@ -427,7 +427,7 @@ class Plugin(indigo.PluginBase):
             if 'discovery' in self.globals[THREADS]:
                 self.globals[QUEUES][DISCOVERY].put([QUEUE_PRIORITY_STOP_THREAD, COMMAND_STOP_THREAD, []])
 
-            if self.globals[POLLING][THREAD_ACTIVE] == True:
+            if self.globals[POLLING][THREAD_ACTIVE] is True:
                 self.globals[POLLING][FORCE_THREAD_END] = True
                 self.globals[THREADS][POLLING][EVENT].set()  # Stop the Polling Thread
                 self.globals[THREADS][POLLING][THREAD].join(7.0)  # wait for thread to end
@@ -459,45 +459,45 @@ class Plugin(indigo.PluginBase):
             propsRequiresUpdate = False
             props = dev.pluginProps
 
-            if not "onBrightensToLast" in props:
+            if "onBrightensToLast" not in props:
                 props["onBrightensToLast"] = True
                 propsRequiresUpdate = True
-            elif props["onBrightensToLast"] != True: 
+            elif props["onBrightensToLast"] is not True:
                 props["onBrightensToLast"] = True
                 propsRequiresUpdate = True
 
-            if not "SupportsColor" in props:
+            if "SupportsColor" not in props:
                 props["SupportsColor"] = True
                 propsRequiresUpdate = True
-            elif props["SupportsColor"] != True: 
+            elif props["SupportsColor"] is not True:
                 props["SupportsColor"] = True
                 propsRequiresUpdate = True
 
-            if not "SupportsRGB" in props:
+            if "SupportsRGB" not in props:
                 props["SupportsRGB"] = True
                 propsRequiresUpdate = True
-            elif props["SupportsRGB"] != True: 
+            elif props["SupportsRGB"] is not True:
                 props["SupportsRGB"] = True
                 propsRequiresUpdate = True
 
-            if not "SupportsWhite" in props:
+            if "SupportsWhite" not in props:
                 props["SupportsWhite"] = True
                 propsRequiresUpdate = True
-            elif props["SupportsWhite"] != True: 
+            elif props["SupportsWhite"] is not True:
                 props["SupportsWhite"] = True
                 propsRequiresUpdate = True
 
-            if not "SupportsTwoWhiteLevels" in props:
+            if "SupportsTwoWhiteLevels" not in props:
                 props["SupportsTwoWhiteLevels"] = False
                 propsRequiresUpdate = True
-            elif props["SupportsTwoWhiteLevels"] != False: 
+            elif props["SupportsTwoWhiteLevels"] is not False:
                 props["SupportsTwoWhiteLevels"] = False
                 propsRequiresUpdate = True
 
-            if not "SupportsWhiteTemperature" in props:
+            if "SupportsWhiteTemperature" not in props:
                 props["SupportsWhiteTemperature"] = True
                 propsRequiresUpdate = True
-            elif props["SupportsWhiteTemperature"] != True: 
+            elif props["SupportsWhiteTemperature"] is not True:
                 props["SupportsWhiteTemperature"] = True
                 propsRequiresUpdate = True
 
@@ -521,7 +521,7 @@ class Plugin(indigo.PluginBase):
 
             # Initialise internal to plugin nanoleaf device states to default values
             if dev.id not in self.globals[NL]:
-                self.globals[NL][dev.id]= dict()
+                self.globals[NL][dev.id] = dict()
             self.globals[NL][dev.id][STARTED]                  = False
             self.globals[NL][dev.id][DATE_TIME_STARTED]        = indigo.server.getTime()
             self.globals[NL][dev.id][INITIALISED_FROM_DEVICE]  = False
@@ -554,7 +554,6 @@ class Plugin(indigo.PluginBase):
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def deviceStopComm(self, dev):
-        
 
         self.logger.info(u'Stopping \'{}\''.format(dev.name))
 
@@ -594,7 +593,7 @@ class Plugin(indigo.PluginBase):
             valuesDict["ipAddress"] = nanoleafDev.pluginProps.get("ipAddress", '')
             valuesDict["authToken"] = nanoleafDev.pluginProps.get("authToken", '')
             
-            return (valuesDict, errorDict)
+            return valuesDict, errorDict
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -619,10 +618,9 @@ class Plugin(indigo.PluginBase):
         if valuesDict["nanoleafDeviceId"] in self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES]:
             del self.globals[DISCOVERY][DISCOVERED_UNMATCHED_DEVICES][valuesDict["nanoleafDeviceId"]]
 
-        return (True, valuesDict)
+        return True, valuesDict
 
     def getActionConfigUiValues(self, pluginProps, typeId, devId):
-        
 
         self.logger.debug(u'getActionConfigUiValues: typeId [{}], devId [{}], pluginProps[{}]'.format(typeId, devId, pluginProps))
 
@@ -632,8 +630,7 @@ class Plugin(indigo.PluginBase):
         if typeId == "setEffect":
             if ('effectList' not in valuesDict) or (valuesDict["effectList"] == '') or (len(self.globals[NL][devId][EFFECTS_LIST]) == 0):
                 valuesDict["effectList"] = 'SELECT_EFFECT'
-        return (valuesDict, errorDict)
-
+        return valuesDict, errorDict
 
     def validateActionConfigUi(self, valuesDict, typeId, actionId):
 
@@ -643,12 +640,12 @@ class Plugin(indigo.PluginBase):
             validateResult = self.validateActionConfigUiSetEffect(valuesDict, typeId, actionId)
         else:
             self.logger.debug(u'validateActionConfigUi [UNKNOWN]: typeId=[{}], actionId=[{}]'.format(typeId, actionId))
-            return (True, valuesDict)
+            return True, valuesDict
 
-        if validateResult[0] == True:
-            return (True, validateResult[1])
+        if validateResult[0] is True:
+            return True, validateResult[1]
         else:
-            return (False, validateResult[1], validateResult[2])
+            return False, validateResult[1], validateResult[2]
  
     def validateActionConfigUiSetEffect(self, valuesDict, typeId, actionId):
 
@@ -658,9 +655,9 @@ class Plugin(indigo.PluginBase):
             errorDict = indigo.Dict()
             errorDict["effectList"] = "No Effect selected"
             errorDict["showAlertText"] = "You must select an effect for the action to send to the nanoleaf device"
-            return (False, valuesDict, errorDict)
+            return False, valuesDict, errorDict
 
-        return (True, valuesDict)
+        return True, valuesDict
 
     def openedActionConfigUi(self, valuesDict, typeId, actionId):
 
@@ -677,7 +674,7 @@ class Plugin(indigo.PluginBase):
 
         # if menuId == "yourMenuItemId":
         #  valuesDict["someFieldId"] = someDefaultValue
-        return (valuesDict, errorMsgDict)
+        return valuesDict, errorMsgDict
 
     def actionControlUniversal(self, action, dev):
 
@@ -692,34 +689,34 @@ class Plugin(indigo.PluginBase):
 
     def actionControlDevice(self, action, dev):
         
-        if dev.states['connected'] == False or self.globals[NL][dev.id][STARTED] == False:
+        if dev.states['connected'] is False or self.globals[NL][dev.id][STARTED] is False:
             self.logger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(action.deviceAction, dev.name))
             return
 
         # ##### TURN ON ######
-        if action.deviceAction ==indigo.kDeviceAction.TurnOn:
+        if action.deviceAction == indigo.kDeviceAction.TurnOn:
             self._processTurnOn(action, dev)
 
         # ##### TURN OFF ######
-        elif action.deviceAction ==indigo.kDeviceAction.TurnOff:
+        elif action.deviceAction == indigo.kDeviceAction.TurnOff:
             self._processTurnOff(action, dev)
 
         # ##### TOGGLE ######
-        elif action.deviceAction ==indigo.kDeviceAction.Toggle:
+        elif action.deviceAction == indigo.kDeviceAction.Toggle:
             self._processTurnOnOffToggle(action, dev)
 
         # ##### SET BRIGHTNESS ######
-        elif action.deviceAction ==indigo.kDeviceAction.SetBrightness:
-            newBrightness = action.actionValue  #  action.actionValue contains brightness value (0 - 100)
+        elif action.deviceAction == indigo.kDeviceAction.SetBrightness:
+            newBrightness = action.actionValue  # action.actionValue contains brightness value (0 - 100)
             self._processBrightnessSet(action, dev, newBrightness)
 
         # ##### BRIGHTEN BY ######
-        elif action.deviceAction ==indigo.kDeviceAction.BrightenBy:
+        elif action.deviceAction == indigo.kDeviceAction.BrightenBy:
             if not dev.onState:
                 self.globals[QUEUES][MESSAGE_TO_SEND].put([QUEUE_PRIORITY_COMMAND, COMMAND_IMMEDIATE_ON, [dev.id]])
 
             if dev.brightness < 100:
-                brightenBy = action.actionValue #  action.actionValue contains brightness increase value
+                brightenBy = action.actionValue  # action.actionValue contains brightness increase value
                 newBrightness = dev.brightness + brightenBy
                 if newBrightness > 100:
                     newBrightness = 100
@@ -730,9 +727,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(u'Ignoring Brighten request for {}} as device is at full brightness'.format(dev.name))
 
         # ##### DIM BY ######
-        elif action.deviceAction ==indigo.kDeviceAction.DimBy:
+        elif action.deviceAction == indigo.kDeviceAction.DimBy:
             if dev.onState and dev.brightness > 0: 
-                dimBy = action.actionValue #  action.actionValue contains brightness decrease value
+                dimBy = action.actionValue  # action.actionValue contains brightness decrease value
                 newBrightness = dev.brightness - dimBy
                 if newBrightness < 0:
                     newBrightness = 0
@@ -743,7 +740,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(u'Ignoring Dim request for {} as device is Off'.format(dev.name))
 
         # ##### SET COLOR LEVELS ######
-        elif action.deviceAction ==indigo.kDeviceAction.SetColorLevels:
+        elif action.deviceAction == indigo.kDeviceAction.SetColorLevels:
             self.logger.debug(u'SET COLOR LEVELS = \'{}\' {}'.format(dev.name, action))
             self._processSetColorLevels(action, dev)
 
@@ -768,7 +765,7 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u'nanoleaf \'processTurnOnOffToggle\' [{}]'.format(self.globals[NL][dev.id][IP_ADDRESS])) 
 
         onStateRequested = not dev.onState
-        if onStateRequested == True:
+        if onStateRequested is True:
             actionUi = "toggle from 'off' to 'on'"
             self._processTurnOn(pluginAction, dev, actionUi)
         else:
@@ -803,7 +800,7 @@ class Plugin(indigo.PluginBase):
             if (not colorMode) and (('whiteLevel' in action.actionValue) or ('whiteTemperature' in action.actionValue)):
                 # If either of 'whiteLevel' or 'whiteTemperature' are altered - assume mode is White
                 whiteLevel = float(dev.states['whiteLevel'])
-                whiteTemperature =  int(dev.states['whiteTemperature'])
+                whiteTemperature = int(dev.states['whiteTemperature'])
 
                 if 'whiteLevel' in action.actionValue:
                     whiteLevel = float(action.actionValue['whiteLevel'])
@@ -823,7 +820,7 @@ class Plugin(indigo.PluginBase):
                 # As neither of 'whiteTemperature' or 'whiteTemperature' are set - assume mode is Colour
 
                 props = dev.pluginProps
-                if ("SupportsRGB" in props) and props["SupportsRGB"]:  # Check device supports color
+                if ("SupportsRGB" in props) and props["SupportsRGB"]:  # Check device supports color
                     redLevel = float(dev.states['redLevel'])
                     greenLevel = float(dev.states['greenLevel'])
                     blueLevel = float(dev.states['blueLevel'])
@@ -852,7 +849,7 @@ class Plugin(indigo.PluginBase):
 
     def processSetEffect(self, pluginAction, dev):
         try:      
-            if dev.states['connected'] == False or self.globals[NL][dev.id][STARTED] == False:
+            if dev.states['connected'] is False or self.globals[NL][dev.id][STARTED] is False:
                 self.logger.info(u'Unable to process  \'{}\' for \'{}\' as device not connected'.format(pluginAction.description, dev.name))
                 return
     
@@ -881,7 +878,7 @@ class Plugin(indigo.PluginBase):
             errorDict = indigo.Dict()
             errorDict["nanoleafDevice"] = "IP Address is invalid"
             errorDict["showAlertText"] = "IP Address is invalid! Select Nanoleaf device before attempting to authorise."
-            return (valuesDict, errorDict)
+            return valuesDict, errorDict
 
         try:
             self.globals[NL][devId][NANOLEAF_OBJECT] = Nanoleaf(ipAddress)
@@ -890,7 +887,7 @@ class Plugin(indigo.PluginBase):
             errorDict = indigo.Dict()
             errorDict["authorise"] = 'Access Forbidden to nanoleaf device!'
             errorDict["showAlertText"] = 'Access Forbidden to nanoleaf device! Press and hold the power button for 5-7 seconds first! (Light will begin flashing)'
-            return (valuesDict, errorDict)
+            return valuesDict, errorDict
         else:
             valuesDict["authToken"] = self.globals[NL][devId][NANOLEAF_OBJECT].auth_token  # noqa - self.globals[NL][devId][NANOLEAF_OBJECT] is a Nanoleaf object NOT a text string
 
@@ -908,7 +905,7 @@ class Plugin(indigo.PluginBase):
             errorDict = indigo.Dict()
             errorDict["updateIpAddress"] = "Unable to update IP Address!"
             errorDict["showAlertText"] = "Unable to update IP Address as nanoleaf Device ID not set"
-            return (valuesDict, errorDict)
+            return valuesDict, errorDict
 
     def nanoleafAvailableDeviceSelected(self, valuesDict, typeId, devId):
 

@@ -23,6 +23,7 @@ PINK = (255, 192, 203)
 PURPLE = (128, 0, 128)
 WHITE = (255, 255, 255)
 
+
 class Nanoleaf():
     """The Nanoleaf class for controlling the Light Panels and Canvas
 
@@ -615,8 +616,7 @@ class Nanoleaf():
             print("Cannot register events more than once.")
             return
         if len(event_types) > 4 or len(event_types) < 1:
-            raise Exception("The number of events to register for must be" +
-                "between 1-4")
+            raise Exception("The number of events to register for must be between 1-4")
         for event in event_types:
             if event < 1 or event > 4:
                 raise Exception("Valid event types must be between 1-4")
@@ -625,10 +625,8 @@ class Nanoleaf():
         thread.daemon = True
         thread.start()
 
-    def __event_listener(self, func : Callable[[Dict[str, Any]], Any],
-        event_types : List[int]) -> None:
-        """Listens for events and passes event data to the user-defined
-        function."""
+    def __event_listener(self, func : Callable[[Dict[str, Any]], Any], event_types : List[int]) -> None:
+        """Listens for events and passes event data to the user-defined function."""
         url = self.url + "/events?id="
         for event in event_types:
             url += str(event) + ","

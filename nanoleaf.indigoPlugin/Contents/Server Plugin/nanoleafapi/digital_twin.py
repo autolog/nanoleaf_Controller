@@ -4,7 +4,8 @@ This module allows for the creation of a "digital twin", allowing you to
  make changes to individual panels and sync them to their real counterparts."""
 
 from typing import Tuple, List, Dict
-from nanoleafapi.nanoleaf import NanoleafEffectCreationError, Nanoleaf
+from nanoleaf import NanoleafEffectCreationError, Nanoleaf
+
 
 class NanoleafDigitalTwin():
     """Class for creating and modifying digital twins
@@ -22,7 +23,6 @@ class NanoleafDigitalTwin():
         self.tile_dict = {}
         for panel_id in ids:
             self.tile_dict[panel_id] = {"R": 0, "G": 0, "B": 0, "W": 0, "T": 0}
-
 
     def set_color(self, panel_id : int, rgb : Tuple[int, int, int]) -> None:
         """Sets the colour of an individual panel.
@@ -45,7 +45,6 @@ class NanoleafDigitalTwin():
         self.tile_dict[panel_id]['G'] = rgb[1]
         self.tile_dict[panel_id]['B'] = rgb[2]
 
-
     def set_all_colors(self, rgb : Tuple[int, int, int]) -> None:
         """Sets the colour of all the panels.
 
@@ -65,14 +64,12 @@ class NanoleafDigitalTwin():
             value['G'] = rgb[1]
             value['B'] = rgb[2]
 
-
     def get_ids(self) -> List[int]:
         """Returns a list of panel IDs.
 
         :returns: List of panel IDs.
         """
         return list(self.tile_dict.keys())
-
 
     def get_color(self, panel_id : int) -> Tuple[int, int, int]:
         """Returns the colour of a specified panel.
@@ -85,7 +82,6 @@ class NanoleafDigitalTwin():
             raise NanoleafEffectCreationError("Invalid panel ID")
         return (self.tile_dict[panel_id]['R'], self.tile_dict[panel_id]['G'],
             self.tile_dict[panel_id]['B'])
-
 
     def get_all_colors(self) -> Dict[int, Tuple[int, int, int]]:
         """Returns a dictionary of all panel IDs and associated colours.

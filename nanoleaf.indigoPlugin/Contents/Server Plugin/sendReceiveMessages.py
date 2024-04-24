@@ -1,31 +1,32 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# nanoleaf Controller © Autolog 2017-2022
+# nanoleaf Controller © Autolog 2017-2024
 #
 
 try:
     import indigo
-except:
+except ImportError:
     pass
 
-# import colorsys
+import colorsys
 import queue
 import sys
 import threading
 import traceback
 
 from constants import *
-from nanoleafapi.nanoleaf import *
+from nanoleafapi.nanoleaf import Nanoleaf
 # from nanoleafapi.discovery import *
+
 
 class ThreadSendReceiveMessages(threading.Thread):
 
-    # This class controls the sending of commands to a nanoleaf device and handles it's response.
+    # This class controls the sending of commands to a nanoleaf device and handles its response.
     # It receives high level commands to send to the nanoleaf device from a queue which it waits on
     #   and queues replies for handling by the runConcurrent thread
 
-    # It contains the logic for correctly formatting the the high level commands to be sent to the nanoleaf device
+    # It contains the logic for correctly formatting the high level commands to be sent to the nanoleaf device
     #   into the specific formats required by the nanoleaf device.
 
     def __init__(self, globals):
@@ -55,7 +56,7 @@ class ThreadSendReceiveMessages(threading.Thread):
             while True:
 
                 try:
-                    nanoleaf_queued_priority_command_data = self.globals[QUEUES][MESSAGE_TO_SEND].get(True,5)
+                    nanoleaf_queued_priority_command_data = self.globals[QUEUES][MESSAGE_TO_SEND].get(True, 5)
 
                     self.sendReceiveLogger.debug(f"NANOLEAF QUEUED PRIORITY COMMAND DATA: {nanoleaf_queued_priority_command_data}")
                     nanoleaf_queue_priority, nanoleaf_command, nanoleaf_command_parameters = nanoleaf_queued_priority_command_data
@@ -79,8 +80,7 @@ class ThreadSendReceiveMessages(threading.Thread):
                         nanoleafDevId = nanoleaf_command_parameters[0]
                         nanoleafDev   = indigo.devices[nanoleafDevId]
 
-                        if self.globals[NL][nanoleafDevId][STARTED] == True:
-                            
+                        if self.globals[NL][nanoleafDevId][STARTED] is True:
                             self.sendReceiveLogger.debug(f"Processing {nanoleaf_command} for '{nanoleafDev.name}'")
                             ip_address = self.globals[NL][nanoleafDevId][IP_ADDRESS]
                             auth_token = self.globals[NL][nanoleafDevId][AUTH_TOKEN]
